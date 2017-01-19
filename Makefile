@@ -7,8 +7,8 @@ SCAD := \
 
 MODELS := \
     scrappy_bearing_cap.stl \
-    scrappy_y_motor.stl \
-    scrappy_y_cap.stl \
+    scrappy_y_motor_min.stl \
+    scrappy_y_motor_max.stl \
     scrappy_x_cap.stl \
     scrappy_sled.stl \
     scrappy_block.stl

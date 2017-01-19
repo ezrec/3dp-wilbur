@@ -4,11 +4,8 @@
 //
 // Design constraints:
 //  - Use junk I have laying around left over from other projects
-//  - CoreXY style motion control, but:
-//    - without belt crossing
-//    - both motors are in the same location
+//  - H-Bot style motion control, but:
 //    - Sleds should have no rotational torque from belt tension
-//    - Alpha and Beta belts are planar separated ("top" and "bottom")
 //    - Greased plastic linear bearings
 //    - Clips onto frame, and mount-to-frame fasterners carry minimal load
 //    - Majority of belt tension load is carried by the linear rods
@@ -19,10 +16,13 @@ fn=30;
 
 rod_x = [ 400, 8 ];
 rod_y = [ 400, 8 ];
+rod_slide = [360, 6];
 
 // Depth of the pocket for rods
 rod_pocket = 11;
 
+// Length of the X axis between the MDF boards
+x_length = 280;
 
 belt_width = 6;
 belt_thickness = 2;
@@ -35,7 +35,7 @@ m8_nut_flat = 13;
 m8_nut_height = 7;
 
 nut_tolerance=0.2;
-nut_wall = 1;
+nut_wall = 1.5;
 
 mdf_width = 16;
 mdf_length = 405;
@@ -74,22 +74,22 @@ bearing_width = 5;
 bearing_bore = 4;
 bearing_wall = 0.5;
 
+bearing_holder_diameter = bearing_diameter+wall;
+
 // Distance between the X rods
 x_rod_gap = max(bearing_diameter*2 + wall*2, hotend_fan_diameter + rod_y[1] + rod_wall*2);
-
-// Gap from MDF to the bottom of the block
-z_block_gap = 1.5;
 
 // Calculated
 bearing_cap_height = bearing_wall + nut_wall*2;
 
 y_block_size = rod_y[1] * 2 + rod_wall*2 + x_rod_gap;
 z_block_size = max(rod_y[1], rod_x[1]) + rod_wall*2;
-z_block_offset = z_block_gap;
-y_belt_gap = pulley_belt_gap;
+z_block_offset = z_block_size/2 - rod_y[1]/2 - rod_wall + rod_slide[1];
+y_belt_gap = (bearing_holder_diameter + rod_y[1]/2 + grease_wall)*2;
 
 pulley_gap = x_rod_gap + bearing_diameter;
-block_size = [y_belt_gap+bearing_diameter+rod_wall*2, max(y_block_size, pulley_gap + bearing_diameter + wall*2), z_block_size];
+
+mdf_x_offset = y_belt_gap/2 + bearing_diameter/2 + rod_pocket + mdf_width/2 + rod_slide[1]/2;
 
 module drill(d=3, h=1, tolerance=0.2)
 {
@@ -109,8 +109,6 @@ module flanged()
 	}
 }
 
-bearing_holder_diameter = bearing_diameter+wall;
-
 module scrappy_bearing_cap(bottom=false, nut=true)
 {
     difference()
@@ -124,7 +122,7 @@ module scrappy_bearing_cap(bottom=false, nut=true)
         drill(h=bearing_cap_height, d=bearing_bore);
         if (nut) {
             translate([0, 0, bearing_wall + nut_wall])
-                cylinder(r=m4_nut_flat/sqrt(3)+nut_tolerance, h=bearing_cap_height-(bearing_wall + nut_wall)+0.01, $fn = 6);
+                cylinder(r=m4_nut_flat/sqrt(3)+nut_tolerance, h=bearing_cap_height-(bearing_wall + nut_wall/2)+0.01, $fn = 6);
 
         }
     }
@@ -146,11 +144,11 @@ module bearing()
     translate([0, 0, bearing_width]) scrappy_bearing_cap();
 }
 
-module bearing_holder(h=4, cut=false)
+module bearing_holder_of(h=4, cut=false)
 {
     if (!cut)
     {
-        cylinder(d=6, h=h, $fn=fn);
+        cylinder(d=bearing_holder_diameter, h=h, $fn=fn);
         translate([0, 0, h + bearing_cap_height])
             rotate([180, 0, 0]) scrappy_bearing_cap(nut=false);
         if (hardware)
@@ -162,8 +160,8 @@ module bearing_holder(h=4, cut=false)
     else
     {
         drill(h=h + (belt_width - bearing_width)/2, d=4);
-        translate([0, 0, -0.1])
-            cylinder(h=m4_nut_height, r=m4_nut_flat/sqrt(3) + nut_tolerance, $fn=6);
+        translate([0, 0, -100.1])
+            cylinder(h=m4_nut_height + 100, r=m4_nut_flat/sqrt(3) + nut_tolerance, $fn=6);
     }
 }
 
@@ -187,6 +185,53 @@ module pulley()
     }
 }
 
+module rod_pocket_of(d=8, h=20, cut=false)
+{
+    cd = d + rod_wall*2;
+    
+    if (!cut) {
+        cylinder(h=h, d=cd, $fn=fn);
+        translate([-cd/2,-cd/2, 0]) 
+            cube([cd, cd/2, h]);
+    }
+    else
+    {
+        // Slit for expansion
+        translate([-cd/16,-cd/2, -0.1]) 
+            cube([cd/8, cd/2, rod_pocket+0.1]);
+        drill(h=rod_pocket, d=d);
+    }
+}
+
+module carriage_bearing_of(h=40, d=8, cut=false)
+{
+    cd = d + rod_wall*2;
+    
+    if (!cut)
+    {
+        rod_pocket_of(d=d, h=h, cut=false);
+    }
+    else
+    {
+        translate([0, 0, -0.1])
+            cylinder(d=d, h=h+0.2, $fn=fn);
+        translate([0, 0, rod_wall])
+            cylinder(d=d+2*grease_wall, h = h-rod_wall*2, $fn=fn);
+        translate([-d/2-grease_wall, -cd/2-0.1, rod_wall])
+            cube([d+grease_wall*2, cd/2, h-rod_wall*2]);
+    }
+}
+
+module carriage_bearing(h=40, d=8)
+{
+    difference()
+    {
+        carriage_bearing_of(d=d, h=h, cut=false);
+        carriage_bearing_of(d=d, h=h, cut=true);
+    }
+}
+
+
 module motor_bracket(cut=false)
 {
     translate([0, nema_mount_width/2 + wall, -nema_mount_width/2-wall])
@@ -207,30 +252,24 @@ module motor_bracket(cut=false)
 
 belt_span = 8;
 
-module y_mount()
+y_mount_height = nema_mount_height + wall*2 - z_block_offset - z_block_size;
+
+module y_mount_of(cut=false)
 {
     r = (nema_mount_width - mdf_width+ wall*2)/2;
-    h = nema_mount_height + wall*2 - z_block_offset - z_block_size;
+    h = y_mount_height;
     
-    translate([0, 0, z_block_gap -h])
+    translate([0, 0, -h])
     {
-        difference()
+        if (!cut)
         {
-            
-            union() {
-                translate([mdf_width/2, 0, 0])
-                    cylinder(r = r, h = h);
-                translate([-mdf_width/2, 0, 0])
-                    cylinder(r = r, h = h);
-            }
+            translate([-mdf_width/2-wall, -r, 0])
+                cube([mdf_width+wall*2, r+wall, h + wall]);
+        }
+        else
+        {
             translate([-mdf_width/2-mdf_tolerance, -100, -0.1])
-                cube([mdf_width+mdf_tolerance*2, 100, h-z_block_gap+mdf_tolerance+0.2]);
-            translate([mdf_width/2 + r, -r, -0.1])
-                cylinder(r = r, h=h+0.2);
-            translate([-mdf_width/2 - r, -r, -0.1])
-                cylinder(r = r, h=h+0.2);
-            translate([-r-mdf_width/2, 0, -0.1])
-                cube([r*2+mdf_width+0.1, r+0.1, h+0.2]);
+                cube([mdf_width+mdf_tolerance*2, 100, h+0.2]);
             for (i=[1:3]) translate([0, -r/2, h/4*i]) {
                 translate([-r-mdf_width/2, 0, 0])
                     rotate([0, 90, 0])
@@ -241,63 +280,129 @@ module y_mount()
                 translate([mdf_width/2+nut_wall, 0, 0])
                     rotate([0, 90, 0])
                         cylinder(r=m4_nut_flat/sqrt(3)+nut_tolerance, h=r, $fn=6);
-            }
-                        
+            }           
         }
     }
 }
     
-module scrappy_y_motor()
+module y_motor_of(cut=false)
 {
     rod_offset = (mdf_length - rod_y[0])/2;
+    mount_offset = -y_belt_gap/2+pulley_belt_gap/2;
+    
+    if (!cut)
+    {
+        linear_extrude(height = z_block_size/2) hull() {
+            translate([mount_offset+nema_mount_width/2+wall-0.1, 0])
+                square([0.1, nema_mount_width + wall*2]);
+            translate([y_belt_gap/2-bearing_diameter/2, nema_mount_width/2 + wall - (bearing_diameter - pulley_belt_gap)/2])
+                circle(d=bearing_holder_diameter);
+        }
+    }
+    else
+    {
+        // Cuts for the motor bracket
+        translate([mount_offset, 0, 0])
+        {
+            tilt=45;
+            translate([-nema_mount_width/2-wall-0.1, sin(tilt)*(200)-10, -(nema_mount_width+wall*2-z_block_size/2-z_block_offset)-cos(tilt)*(200)-10]) rotate([tilt, 0, 0]) cube([nema_mount_width*3+wall*2+0.2, 200, 200]);
+        }
+    }
+
+    // Rod holder for primary rod
+    translate([0, -rod_pocket+rod_offset, 0]) rotate([-90, 0, 0]) rotate([0, 0, 180])
+        rod_pocket_of(d=rod_y[1], h=rod_pocket+rod_offset, cut=cut);
+    
+    // Rod holder for secondary rod
+    translate([mdf_x_offset, -(mdf_length - rod_slide[0])/2-rod_pocket, -z_block_size/2-z_block_offset+rod_wall+rod_slide[1]/2]) rotate([-90, 0, 0]) rotate([0, 0, 180])
+        rod_pocket_of(d=rod_slide[1], h=(mdf_length - rod_slide[0])/2+rod_pocket, cut=cut);
+    
+    // Bracket for the motor
+    translate([mount_offset, 0, z_block_size/2])
+        motor_bracket(cut=cut);
+    
+    if (!cut)
+    {
+       // Attach bracket to mount
+       translate([mount_offset - nema_mount_width/2 - wall , 0, -z_block_size/2 - z_block_offset - y_mount_height])
+        {
+            cube([nema_mount_width/2 + wall - mount_offset + mdf_width/2 + wall + mdf_x_offset, wall, y_mount_height + wall]);
+        
+            for (i=[0:2:6]) translate([0, wall, y_mount_height/7*i]) {
+                cube([nema_mount_width/2 + wall - mount_offset + mdf_width/2 + wall + mdf_x_offset, nema_mount_width, wall]);
+            }
+        }
+    }
+
+    // Bracket to attach to the MDF
+    translate([mdf_x_offset, 0, -z_block_size/2 - z_block_offset])
+        y_mount_of(cut=cut);
+        
+    // Secondary pulley
+    translate([y_belt_gap/2-bearing_diameter/2, nema_mount_width/2 + wall - (bearing_diameter - pulley_belt_gap)/2, 0])
+        bearing_holder_of(h=z_block_size/2, cut=cut, teeth=true);
+    
+}
+
+module y_motor()
+{
+    mount_offset = -y_belt_gap/2+pulley_belt_gap/2;
     
     difference()
     {
-        union() {
-            // Rod holder
-            translate([-rod_y[1]/2-rod_wall, -rod_pocket - rod_offset, -z_block_offset - z_block_size/2 - 0.01])
-                cube([rod_y[1] + rod_wall*2, rod_pocket + rod_offset + 0.1, z_block_offset + z_block_size]);
-            translate([0, 0, z_block_size/2 + z_block_offset])
-                motor_bracket(cut=false);
-            translate([0, 0, -z_block_size/2 - z_block_offset])
-                y_mount();
-        }
-        translate([0, 0, z_block_size/2 + z_block_offset])
-            motor_bracket(cut=true);
-        translate([0, -rod_pocket-rod_offset, 0]) rotate([-90, 0, 0]) drill(h=rod_pocket, d=rod_y[1]);
-        tilt=45;
-        translate([-nema_mount_width/2-wall-0.1, sin(tilt)*200, -(nema_mount_width+wall*2-z_block_size/2-z_block_offset)-cos(tilt)*200]) rotate([tilt, 0, 0]) cube([nema_mount_width+wall*2+0.2, 200, 200]);
+        y_motor_of(cut=false);
+        y_motor_of(cut=true);
     }
 
-    if (hardware) color([0.0, 0.5, 0.7]) {
-        translate([0, nema_mount_width/2 + wall, z_block_size/2])
-        {
-            pulley();
+    if (hardware) {
+
+        color([0.0, 0.5, 0.7]) {
+            translate([mount_offset, nema_mount_width/2 + wall, z_block_size/2 - wall])
+                pulley();
         }
-    }    
+
+        # translate([-y_belt_gap/2-belt_thickness, -50, z_block_size/2 + bearing_cap_height])
+            cube([belt_thickness, 100, belt_width]);
+        # translate([y_belt_gap/2, -50, z_block_size/2 + bearing_cap_height])
+            cube([belt_thickness, 100, belt_width]);
+    }
+}
+
+module scrappy_y_motor_max()
+{
+    y_motor();
+}
+
+module scrappy_y_motor_min()
+{
+    mirror([0, 1, 0]) y_motor();
 }
 
 module x_cap_of(cut=false)
 {
-    x_size = [rod_pocket+bearing_diameter+wall*2, y_block_size, z_block_size];
+    x_size = rod_pocket+bearing_diameter+wall*2;
     
-    if (!cut)
-    {
-        cube(x_size, center=true);
+    if (!cut) {
+        translate([0, 0, -z_block_size/2]) linear_extrude(height=z_block_size) hull()
+        {
+            translate([0, -x_rod_gap/2])
+                circle(d=bearing_holder_diameter);
+            translate([0, x_rod_gap/2])
+                circle(d=bearing_holder_diameter);
+        }
     }
-    else
-    {
-        translate([-x_size[0]/2, -x_rod_gap/2, 0])
-            rotate([0, 90, 0]) drill(h=rod_pocket, d=rod_y[1]);
-        translate([-x_size[0]/2, x_rod_gap/2, 0])
-            rotate([0, 90, 0]) drill(h=rod_pocket, d=rod_y[1]);
-    }
+        
+    translate([-x_size/2, -x_rod_gap/2, 0]) rotate([0, 90, 0]) rotate([0, 0, 90])
+        rod_pocket_of(d=rod_y[1], h=rod_pocket+rod_wall, cut=cut);
     
-    translate([0, -x_rod_gap/2+bearing_diameter/2, -x_size[2]/2])
-        bearing_holder(h=x_size[2], cut=cut);
+    translate([-x_size/2, x_rod_gap/2, 0]) rotate([0, 90, 0]) rotate([0, 0, 90])
+        rod_pocket_of(d=rod_y[1], h=rod_pocket+rod_wall, cut=cut);
     
-    translate([0, x_rod_gap/2-bearing_diameter/2, -x_size[2]/2])
-        bearing_holder(h=x_size[2], cut=cut);
+    translate([0, -x_rod_gap/2+bearing_diameter/2, -z_block_size/2])
+        bearing_holder_of(h=z_block_size, cut=cut);
+    
+    translate([0, x_rod_gap/2-bearing_diameter/2, -z_block_size/2])
+        bearing_holder_of(h=z_block_size, cut=cut);
 }
 
 module scrappy_x_cap()
@@ -309,133 +414,179 @@ module scrappy_x_cap()
     }
 }
 
-module sled_rod_cut(size=[1,2,3])
-{
-    translate([-size[0]/2, -x_rod_gap/2, 0]) rotate([0, 90, 0]) drill(d=rod_y[1], h=size[0]);
-    translate([-size[0]/2+wall, -x_rod_gap/2, 0]) rotate([0, 90, 0]) drill(d=rod_y[1]+grease_wall*2, h=size[0]-wall*2);
-    translate([-size[0]/2+wall, -x_rod_gap/2-rod_y[1]/sqrt(3)/2, -rod_y[1]/2-wall-0.1])
-            cube([size[0]-wall*2, rod_y[1]/sqrt(3), rod_y[1]/2 + wall + 0.1]);
-}
 
 sled_size = [y_block_size, x_rod_gap, hotend_latch_height];
 
 module gt2_belt_arc(h=1, r=10)
 {
     belt_thickness = 1;
-    translate([r, -r+belt_thickness, 0])
+    belt_pitch = 2.0;
+    tooth_radius = 0.8;
+    
+    translate([r, r-belt_thickness, 0])
+    {
+        difference()
+        {
+            cylinder(r = r + belt_thickness, h = h);
+            translate([0, 0, -0.1])
+                cylinder(r = r, h = h+0.2);
+        }
+        for (theta = [0:belt_pitch/r:2*PI])
+        {
+            translate([r*cos(theta*180/PI),r*sin(theta*180/PI),0])
+                cylinder(r = tooth_radius, h=h, $fn=fn);
+        }
+    }
+}
+
+module gt2_belt_holder_of(h=10, d=10, cut=false)
+{
+    if (!cut)
+    {
+        cylinder(h=h, r=d/2, $fn=fn);
+    }
+    else
+    {
+        translate([0, 0, h-belt_width])
+            gt2_belt_arc(h=belt_width+0.1, r=d/2);
+    }
+}
+
+module gt2_belt_holder(h=10, d=10)
+{
     difference()
     {
-        cylinder(r = r, h = h);
-        translate([0, 0, -0.1])
-            cylinder(r = (r - belt_thickness), h = h+0.2);
+        gt2_belt_holder_of(h=h, d=d, cut=false);
+        gt2_belt_holder_of(h=h, d=d, cut=true);
     }
+}
+
+module scrappy_sled_of(cut=false)
+{
+    s_size = sled_size;
+    
+    if (!cut)
+    {
+        translate([0, 0, -z_block_size/2+s_size[2]/2])
+            cube([s_size[0], s_size[1]-rod_x[1]-grease_wall*2, s_size[2]], center=true);
+    }
+    else
+    {
+        // Hotend mounting drills
+        translate([0, 0, -z_block_size/2])
+            drill(h=s_size[2], d=hotend_latch_diameter);
+    }
+    
+    // Bearing holder
+    translate([-s_size[0]/2+bearing_holder_diameter/2, 0, -z_block_size/2])
+            bearing_holder_of(h=z_block_size, cut=cut);
+               
+    // Belt holders
+    translate([s_size[0]/2-bearing_holder_diameter/2, x_rod_gap/2-bearing_diameter, -z_block_size/2])
+        gt2_belt_holder_of(d=bearing_diameter, h=z_block_size + bearing_cap_height + belt_width, cut=cut);
+    
+    translate([s_size[0]/2-bearing_holder_diameter/2, -(x_rod_gap/2-bearing_diameter), -z_block_size/2])
+        mirror([0,1,0])
+            gt2_belt_holder_of(d=bearing_diameter, h=z_block_size + bearing_cap_height + belt_width, cut=cut);
+    
+    translate([-s_size[0]/2, -x_rod_gap/2, 0]) rotate([0, 90, 0]) rotate([0, 0, 90])
+        carriage_bearing_of(h=s_size[0], d=rod_x[1], cut=cut);
+    
+    translate([-s_size[0]/2, x_rod_gap/2, 0]) rotate([0, 90, 0]) rotate([0, 0, 90])
+        carriage_bearing_of(h=s_size[0], d=rod_x[1], cut=cut);
 }
 
 module scrappy_sled()
 {
-    s_size = sled_size;
-    
     difference()
     {
-        union()
-        {
-            cube(s_size, center=true);
-            translate([-s_size[0]/2, -x_rod_gap/2, 0]) rotate([0, 90, 0]) rotate([0, 0, 30])
-                cylinder(r=(rod_y[1] + wall)/sqrt(3), h = s_size[0], $fn = 6);
-            translate([-s_size[0]/2, x_rod_gap/2, 0]) rotate([0, 90, 0]) rotate([0, 0, 30])
-                cylinder(r=(rod_y[1] + wall)/sqrt(3), h = s_size[0], $fn = 6);
-            
-            // Belt loop bearing
-            translate([-s_size[0]/2+bearing_holder_diameter/2, 0, 0]) {
-                cylinder(d=bearing_holder_diameter, h=z_block_size/2, $fn=fn);
-                bearing_holder(h=z_block_size/2);
-            }
-            
-            // Belt holders
-            translate([s_size[0]/2-bearing_holder_diameter/2, x_rod_gap/2-bearing_diameter])
-                cylinder(d=bearing_diameter, h=z_block_size/2 + bearing_cap_height + belt_width, $fn=fn);
-            
-            translate([s_size[0]/2-bearing_holder_diameter/2, -(x_rod_gap/2-bearing_diameter)])
-                cylinder(d=bearing_diameter, h=z_block_size/2 + bearing_cap_height + belt_width, $fn=fn);
-        }
-        sled_rod_cut(size=s_size); rotate([0, 0, 180]) sled_rod_cut(size=s_size);
-        translate([0, 0, -s_size[2]/2]) {
-            drill(h=s_size[2], d=hotend_latch_diameter);
-        }
-        translate([s_size[0]/2-bearing_holder_diameter/2, x_rod_gap/2-bearing_diameter, z_block_size/2 + bearing_cap_height])
-            gt2_belt_arc(h=belt_width+0.1, r=belt_width);
-        translate([s_size[0]/2-bearing_holder_diameter/2, -(x_rod_gap/2-bearing_diameter), z_block_size/2 + bearing_cap_height])
-            mirror([0, 1, 0]) gt2_belt_arc(h=belt_width+0.1, r=belt_width);
+        scrappy_sled_of(cut=false);
+        scrappy_sled_of(cut=true);
     }
 }
 
 // X and Y axis interface block
-module scrappy_block()
-{
-    b_size = block_size;
-    
-    difference()
+module scrappy_block_of(cut=false)
+{       
+    // Y rod pockets
+    if (!cut)
     {
-        union()
-        {
-            cube(b_size, center=true);
-            translate([-y_belt_gap/2, -b_size[1]/2, -b_size[2]/2]) 
-                cube([y_belt_gap + bearing_diameter + rod_pocket, b_size[1], b_size[2]]);
-            // Pulleys
-            translate([y_belt_gap/2+bearing_diameter/2, 0, 0])
-            {
-                translate([0, -pulley_gap/2, -b_size[2]/2])  bearing_holder(h=b_size[2], cut=false);
-                translate([0, pulley_gap/2, -b_size[2]/2])  bearing_holder(h=b_size[2], cut=false);
-            }
-            
-            translate([-y_belt_gap/2, 0, 0])
-            {
-                translate([0, -bearing_diameter, -b_size[2]/2])  bearing_holder(h=b_size[2], cut=false);
-                translate([0, bearing_diameter, -b_size[2]/2])  bearing_holder(h=b_size[2], cut=false);
-            }
+        translate([0, 0, -z_block_size/2]) linear_extrude(height=z_block_size) hull() {
+            translate([y_belt_gap/2+bearing_diameter/2, -pulley_gap/2, 0]) circle(d=bearing_holder_diameter);
+            translate([y_belt_gap/2+bearing_diameter/2, pulley_gap/2, 0]) circle(d=bearing_holder_diameter);
+            translate([-y_belt_gap/2+bearing_diameter/2, -bearing_diameter, 0]) circle(d=bearing_holder_diameter);
+            translate([-y_belt_gap/2+bearing_diameter/2, bearing_diameter, 0]) circle(d=bearing_holder_diameter);
         }
-        // Bearing surfaces
-        translate([0, b_size[1]/2]) rotate([90, 0, 0]) drill(d=rod_y[1], h=b_size[1]);
-        translate([0, b_size[1]/2-wall]) rotate([90, 0, 0]) drill(d=rod_y[1]+grease_wall*2, h=b_size[1]-wall*2);
-        translate([-rod_y[1]/2, 0, 0])
-            cube([rod_y[1]+rod_wall+0.1, b_size[1]-wall*2, rod_y[1]+grease_wall*2], center=true);
-        // Y rod pockets
-        translate([y_belt_gap/2+bearing_diameter, 0, 0])
-        {
-            translate([0, -x_rod_gap/2, 0]) rotate([0, 90, 0]) drill(d=rod_x[1], h=rod_pocket);
-            translate([0, x_rod_gap/2, 0]) rotate([0, 90, 0]) drill(d=rod_x[1], h=rod_pocket);
-        }
-        // Pulleys
-        translate([y_belt_gap/2+bearing_diameter/2, 0, 0])
-        {
-            translate([0, -pulley_gap/2, -b_size[2]/2])  bearing_holder(h=b_size[2], cut=true);
-            translate([0, pulley_gap/2, -b_size[2]/2])  bearing_holder(h=b_size[2], cut=true);
-        }
+    }
+    
+    translate([y_belt_gap/2+bearing_diameter, 0, 0])
+    {
+        translate([0, -x_rod_gap/2, 0]) rotate([0, 90, 0]) rotate([0, 0, 90])
+            rod_pocket_of(d=rod_x[1], h=rod_pocket, cut=cut);
+        translate([0, x_rod_gap/2, 0]) rotate([0, 90, 0]) rotate([0, 0, 90])
+            rod_pocket_of(d=rod_x[1], h=rod_pocket, cut=cut);
+    }
+    
+    translate([0, -x_rod_gap/2 - bearing_holder_diameter/2, 0]) rotate([-90, 0, 0]) rotate([ 0, 0, -180])
+        carriage_bearing_of(h=x_rod_gap + bearing_holder_diameter, d=rod_y[1], cut=cut);
+    
+    // Bearings
+    translate([y_belt_gap/2+bearing_diameter/2, 0, -z_block_size/2])
+    {
+        translate([0, -pulley_gap/2, 0])  bearing_holder_of(h=z_block_size, cut=cut);
+        translate([0, pulley_gap/2, 0])  bearing_holder_of(h=z_block_size, cut=cut);
+    }
+    
+    translate([-y_belt_gap/2+bearing_diameter/2, 0, -z_block_size/2])
+    {
+        translate([0, -bearing_diameter, 0])  bearing_holder_of(h=z_block_size, cut=cut);
+        translate([0, bearing_diameter, 0])  bearing_holder_of(h=z_block_size, cut=cut);
     }
 }
 
+module scrappy_block()
+{
+    difference()
+    {
+        scrappy_block_of(cut=false);
+        scrappy_block_of(cut=true);
+    }
+
+    if (hardware)
+    {
+        # translate([-y_belt_gap/2-belt_thickness, -50, z_block_size/2 + bearing_cap_height])
+            cube([belt_thickness, 100, belt_width]);
+        # translate([y_belt_gap/2, -50, z_block_size/2 + bearing_cap_height])
+            cube([belt_thickness, 100, belt_width]);
+    }
+}
 
 module scrappy()
 {
-    translate([0, mdf_length/2, 0]) scrappy_y_motor();
+    translate([0, mdf_length/2, 0]) scrappy_y_motor_max();
     translate([0, 0, 0]) scrappy_block();
-    translate([0, -mdf_length/2, 0]) rotate([0, 0, 180]) scrappy_y_motor();
+    translate([0, -mdf_length/2, 0]) scrappy_y_motor_min();
     translate([rod_x[0]/2, 0, 0]) scrappy_sled();
     translate([rod_x[0], 0, 0]) scrappy_x_cap();
-    
+
     // Additional Mechanicals
-    if (hardware) color([0, 0.8, 0]) {
-        translate([0, x_rod_gap/2, 0]) rotate([0, 90, 0]) cylinder(h = rod_x[0], d = rod_x[1], $fn=fn);
-        translate([0, -x_rod_gap/2, 0]) rotate([0, 90, 0]) cylinder(h = rod_x[0], d = rod_x[1], $fn=fn);
-        
-        translate([0, rod_y[0]/2, 0]) rotate([90, 0, 0]) cylinder(h = rod_y[0], d = rod_y[1], $fn=fn);
+    if (hardware)
+    {
+        color([0, 0.8, 0]) {
+            translate([0, x_rod_gap/2, 0]) rotate([0, 90, 0]) cylinder(h = rod_x[0], d = rod_x[1], $fn=fn);
+            translate([0, -x_rod_gap/2, 0]) rotate([0, 90, 0]) cylinder(h = rod_x[0], d = rod_x[1], $fn=fn);
+            translate([0, rod_y[0]/2, 0]) rotate([90, 0, 0]) cylinder(h = rod_y[0], d = rod_y[1], $fn=fn);
+            translate([mdf_x_offset, rod_slide[0]/2, -z_block_offset-z_block_size/2+rod_wall+rod_slide[1]/2]) rotate([90, 0, 0]) cylinder(h = rod_slide[0], d = rod_slide[1], $fn=fn);
+        }
+
+        translate([mdf_x_offset, 0, 0]) {
+        # translate([-mdf_width/2, -mdf_length/2, -100-z_block_offset-z_block_size/2])
+            cube([mdf_width, mdf_length, 100]);
+        }
     }
-
-    # translate([-mdf_width/2, -mdf_length/2, -100-z_block_offset-z_block_size/2])
-        cube([mdf_width, mdf_length, 100]);
  }
-
+ 
 scrappy();
 
-echo("Maximum printable X,Y:",rod_x[0]-rod_pocket*2-sled_size[1],rod_y[0]-rod_pocket*2-block_size[1]);
+echo("Maximum printable X,Y:",x_length-sled_size[1],rod_y[0]-rod_pocket*2-sled_size[0]);
 
