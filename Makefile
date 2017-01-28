@@ -3,7 +3,9 @@ MKDIR ?= mkdir -p
 OPENSCAD ?= openscad
 
 SCAD := \
-	scrappy.scad
+	scrappy.scad \
+	scrappy_z_bracket.scad \
+	scrappy_z_clip.scad
 
 MODELS := \
     scrappy_bearing_cap.stl \
@@ -11,7 +13,11 @@ MODELS := \
     scrappy_y_motor_max.stl \
     scrappy_x_cap.stl \
     scrappy_sled.stl \
-    scrappy_block.stl
+    scrappy_block.stl \
+    scrappy_y_rail_cap.stl \
+    scrappy_z_bracket_left.stl \
+    scrappy_z_bracket_right.stl \
+    scrappy_z_clip.stl
 
 
 all: $(MODELS:%=stl/%)
