@@ -27,22 +27,25 @@ inch = 25.4;
 
 mdf_width = 16;
 mdf_length = 405;
-mdf_tolerance = 0.2;
+mdf_tolerance = 0.2*2;
 
-clip_tolerance = 0.2;
+clip_tolerance = 0.2*3;
 
 // Wall size (structural)
-wall = 3;
+wall = 4;
 
 module scanner_clip_cut()
 {
-    scale([inch, inch])
+    scale([inch, inch]) {
         polygon([[0,0],[-100,-0],[-100,-100],[0.12 + clip_tolerance/inch,-100],[0.12+clip_tolerance/inch,0],[0.15+clip_tolerance/inch,1], [0.05, 1]]);
+        translate([0.1 + clip_tolerance/inch/2, 1]) circle(d=0.1 + clip_tolerance/inch, $fn=30);
+    }
 }
 
 module mdf_cut()
 {
-   square([mdf_width + mdf_tolerance*2, 100]);
+   translate([-mdf_tolerance, -mdf_tolerance])
+        square([mdf_width + mdf_tolerance*2, 100]);
 }
 
 module scrappy_z_clip(h=1*inch)
@@ -51,14 +54,15 @@ module scrappy_z_clip(h=1*inch)
     {
         union()
         {
-            translate([-0.15*inch-wall*2, -wall])
-                square([wall+0.15*inch+wall+mdf_width + wall, wall+1*inch+wall]);
-            translate([-0.15*inch/2-wall, 1*inch+wall])
-                scale([1, 0.75]) circle(d=0.15*inch+wall*2, $fn=30);
+            translate([-wall-0.15*inch-wall, -wall])
+                square([wall+0.15*inch+wall+wall+mdf_width+wall, wall+1*inch+wall]);
+            translate([-0.15*inch/2-wall*0.5, 1*inch+wall])
+                scale([1, 0.75]) circle(d=0.15*inch+wall*3, $fn=30);
         }
-        translate([-0.15*inch-wall, -0.01])
+        translate([-0.15*inch-wall*1.25, -0.01])
             scanner_clip_cut();
-        mdf_cut();
+        translate([wall, 0])
+            mdf_cut();
     }
 }
 

@@ -17,7 +17,8 @@ MODELS := \
     scrappy_y_rail_cap.stl \
     scrappy_z_bracket_left.stl \
     scrappy_z_bracket_right.stl \
-    scrappy_z_clip.stl
+    scrappy_z_clip.stl \
+    scrappy_z_standoff.stl
 
 
 all: $(MODELS:%=stl/%)

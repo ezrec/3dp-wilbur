@@ -83,7 +83,7 @@ module mounting_rods()
     linear_extrude(center=false, height=total_length, twist=40, slices=100)
             translate([-bottom_screw_distance/2, bottom_screw_height]) rotate([0, 0, angle])
             translate([distance * 0.1, -wall*2.5]) circle(d=wall*4);
-    linear_extrude(center=false, height=total_length, twist=40, slices=100)
+    linear_extrude(center=false, height=total_length, twist=25, slices=100)
         translate([-bottom_screw_distance/2, bottom_screw_height]) rotate([0, 0, angle])
             translate([distance * 0.9, -wall*2.5]) circle(d=wall*4);
 }
@@ -128,20 +128,22 @@ module mounting_bracket_of(cut=false)
             
             // Lip
             linear_extrude(height=wall*3) 
-                translate([-top_margin/2, total_height-wall]) square([mounting_diameter, wall]);
+                translate([-top_margin/2, total_height-wall]) square([mounting_diameter, wall*3]);
             
             // Mounting
-            * mounting_rods();
+            mounting_rods();
             
-            * rotate([-90, 0, 0]) translate([0, 0, total_height-wall]) linear_extrude(height=wall) hull() {
+            rotate([-90, 0, 0]) translate([0, 0, total_height-wall]) linear_extrude(height=wall) hull() {
                 projection(cut=true) translate([0, 0, -total_height]) rotate([90, 0, 0]) mounting_rods();
             }
         }
     }
     else
     {
-        translate([-total_width, -total_width*2, total_height])
+        translate([-total_width, -total_width*2-wall*3, total_height])
             cube([total_width*2, total_width*2, total_height]);
+        translate([-total_width, -total_width*2-wall, total_height])
+            cube([total_width*2, total_width*2, 1/8 * inch]);
     } 
         
 }
@@ -167,12 +169,21 @@ module scrappy_z_bracket_right()
     mirror([1, 0, 0]) mounting_bracket();
 }
 
+module scrappy_z_standoff()
+{
+    difference()
+    {
+        cylinder(d=1/4 * inch, h = 1/8 * inch, $fn = fn);
+        translate([0, 0, -0.1]) cylinder(d=1/8 * inch, h = 1/8 * inch + 0.2, $fn = fn);
+    }
+}
+
 scrappy_z_bracket_left();
 
 scrappy_z_bracket_right();
 
 if (hardware)
 {
-    % translate([-total_width/2, -total_length, total_height])
-        cube([total_width, total_length, wall]);
+    % translate([-total_width/2, -12*inch-wall, total_height])
+        cube([total_width, 12*inch, wall]);
 }
