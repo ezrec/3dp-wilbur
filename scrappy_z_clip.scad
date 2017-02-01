@@ -23,6 +23,8 @@
 // DEALINGS IN THE SOFTWARE.
 //
 
+hardware = true;
+
 inch = 25.4;
 
 mdf_width = 16;
@@ -33,6 +35,8 @@ clip_tolerance = 0.2*3;
 
 // Wall size (structural)
 wall = 4;
+
+fn=30;
 
 module scanner_clip_cut()
 {
@@ -66,6 +70,51 @@ module scrappy_z_clip(h=1*inch)
     }
 }
 
-scrappy_z_clip(h=1*inch);
+switch_body=[6.5, 20, 10];
+switch_hole_distance=9.5;
+switch_hole_top=3;
+switch_hole_size=3.25;
+
+module scrappy_z_endstop_holder()
+{
+    difference()
+    {
+        union()
+        {
+            hull()
+            {
+                rotate([90, 0, 0]) cylinder(d=9+wall*2, h=wall*2, $fn=fn);
+                translate([-wall-switch_body[0]/2, -wall*2, -9/2-wall-switch_body[2]])
+                    cube([wall, wall*2, switch_body[2]]);
+            }
+            hull()
+            {
+                translate([-wall-switch_body[0]/2, -wall*2, -9/2-wall-switch_body[2]])
+                    cube([wall, wall*2, switch_body[2]+9/2+wall-1/8*inch]);
+                translate([-wall-switch_body[0]/2, -wall*2-switch_body[1], -9/2-wall-switch_body[2]])
+                    cube([wall, switch_body[1], switch_body[2]]);
+            }
+        }
+        union()
+        {
+            rotate([90, 0, 0]) translate([0, 0, -0.1]) cylinder(d=9, h=wall+0.2, $fn=fn);
+            rotate([90, 0, 0]) translate([0, 0, -0.1]) cylinder(d=1/8*inch, h=wall*2+0.2, $fn=fn);
+            translate([-wall-switch_body[0]/2-0.1, -wall*2-switch_body[1]/2, -9/2-wall-switch_hole_top]) {
+                translate([0, -switch_hole_distance/2, 0])
+                    rotate([0, 90, 0]) cylinder(d=switch_hole_size, h=wall+0.2, $fn=fn);                
+                translate([0, switch_hole_distance/2, 0])
+                    rotate([0, 90, 0]) cylinder(d=switch_hole_size, h=wall+0.2, $fn=fn);                
+            }
+        }
+    }
+    
+    if (hardware)
+    {
+        % translate([-switch_body[0]/2, -wall*2-switch_body[1], -9/2-wall-switch_body[2]])
+         cube(switch_body);
+    }
+}
+
+scrappy_z_endstop_holder();
 
 // vim: set shiftwidth=4 expandtab: //

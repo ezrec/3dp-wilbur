@@ -5,7 +5,8 @@ OPENSCAD ?= openscad
 SCAD := \
 	scrappy.scad \
 	scrappy_z_bracket.scad \
-	scrappy_z_clip.scad
+	scrappy_z_clip.scad \
+	scrappy_power_box.scad
 
 MODELS := \
     scrappy_bearing_cap.stl \
@@ -18,7 +19,9 @@ MODELS := \
     scrappy_z_bracket_left.stl \
     scrappy_z_bracket_right.stl \
     scrappy_z_clip.stl \
-    scrappy_z_standoff.stl
+    scrappy_z_standoff.stl \
+    scrappy_z_endstop_holder.stl \
+    scrappy_power_box.stl
 
 
 all: $(MODELS:%=stl/%)
