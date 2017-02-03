@@ -6,7 +6,8 @@ SCAD := \
 	scrappy.scad \
 	scrappy_z_bracket.scad \
 	scrappy_z_clip.scad \
-	scrappy_power_box.scad
+	scrappy_power_box.scad \
+	scrappy_hotend.scad
 
 MODELS := \
     scrappy_bearing_cap.stl \
@@ -21,7 +22,8 @@ MODELS := \
     scrappy_z_clip.stl \
     scrappy_z_standoff.stl \
     scrappy_z_endstop_holder.stl \
-    scrappy_power_box.stl
+    scrappy_power_box.stl \
+    scrappy_hotend_geeetech_peek.stl
 
 
 all: $(MODELS:%=stl/%)
