@@ -36,7 +36,14 @@ clip_tolerance = 0.2*3;
 // Wall size (structural)
 wall = 4;
 
-fn=30;
+fn=60;
+
+drill_tolerance=0.25;
+
+module drill(d=3, h=1, tolerance=drill_tolerance)
+{
+    translate([0, 0, -0.1]) cylinder(d=d + tolerance*2, h=h+0.2, $fn =fn);
+}
 
 module scanner_clip_cut()
 {
@@ -114,6 +121,29 @@ module scrappy_z_endstop_holder()
          cube(switch_body);
     }
 }
+
+module scrappy_stiffener_clip(d=33.5, hole=1/8*inch)
+{
+    difference()
+    {
+        union()
+        {
+            linear_extrude(height=d+wall*2) {
+                    translate([-wall, -wall]) 
+                        square([wall+mdf_width+wall, wall+d/2+wall]);
+                    square([mdf_width+wall, wall+wall+d+wall]);
+            }
+            translate([mdf_width, wall+d/2, wall + d/2]) rotate([0, 90, 0]) cylinder(d=d+wall*2, h=wall+wall*2, $fn=fn);
+        }
+        translate([0, 0, -0.1]) linear_extrude(height=d+wall*2+0.2) mdf_cut();
+        translate([0, wall+d/2, wall + d/2]) rotate([0, 90, 0]) drill(d=d+0.5, h=mdf_width+wall+wall*2+0.1, $fn=fn);
+        // Drill holes
+        translate([-wall, d/4, wall + d/2 - d/4]) rotate([0, 90, 0]) drill(d=hole, h=wall);
+        translate([-wall, d/4, wall + d/2 + d/4]) rotate([0, 90, 0]) drill(d=hole, h=wall);
+    }
+}
+
+!scrappy_stiffener_clip();
 
 scrappy_z_endstop_holder();
 

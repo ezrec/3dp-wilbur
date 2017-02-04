@@ -23,7 +23,9 @@ MODELS := \
     scrappy_z_standoff.stl \
     scrappy_z_endstop_holder.stl \
     scrappy_power_box.stl \
-    scrappy_hotend_geeetech_peek.stl
+    scrappy_hotend_geeetech_peek.stl \
+    scrappy_height_sensor_mount.stl \
+    scrappy_stiffener_clip.stl
 
 
 all: $(MODELS:%=stl/%)

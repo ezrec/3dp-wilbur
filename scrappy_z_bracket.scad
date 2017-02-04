@@ -75,17 +75,26 @@ mounting_diameter = 1 * inch;
 
 hardware=true;
 
-module mounting_rods()
+module mounting_angle()
 {
     distance = sqrt(pow((bottom_screw_distance - top_screw_distance)/2, 2) +
                     pow(vertical_screw_distance, 2));
     angle = atan(vertical_screw_distance / (bottom_screw_distance - top_screw_distance) * 2);
-    linear_extrude(center=false, height=total_length, twist=40, slices=100)
-            translate([-bottom_screw_distance/2, bottom_screw_height]) rotate([0, 0, angle])
-            translate([distance * 0.1, -wall*2.5]) circle(d=wall*4);
-    linear_extrude(center=false, height=total_length, twist=25, slices=100)
-        translate([-bottom_screw_distance/2, bottom_screw_height]) rotate([0, 0, angle])
-            translate([distance * 0.9, -wall*2.5]) circle(d=wall*4);
+    
+    for (x = [-total_width/2+wall*4:1:-top_margin/2+wall])
+    {
+        z = -x/2-wall*2;
+        translate([x, total_height-z, 0]) rotate([0, -90, 0])
+        linear_extrude(height=1+0.01) {
+            difference()
+            {
+                polygon([[0,0],[top_margin/2,z-wall],[top_margin/2,z],[0,z]]);
+                if (x > -total_width/2+wall*4+wall) {
+                    polygon([[wall,wall*2],[top_margin/2-wall*3,z-wall],[wall,z-wall]]);
+                }
+            }
+        }
+    }
 }
 
 module mounting_bracket_of(cut=false)
@@ -131,11 +140,7 @@ module mounting_bracket_of(cut=false)
                 translate([-top_margin/2, total_height-wall]) square([mounting_diameter, wall*3]);
             
             // Mounting
-            mounting_rods();
-            
-            rotate([-90, 0, 0]) translate([0, 0, total_height-wall]) linear_extrude(height=wall) hull() {
-                projection(cut=true) translate([0, 0, -total_height]) rotate([90, 0, 0]) mounting_rods();
-            }
+            mounting_angle();
         }
     }
     else

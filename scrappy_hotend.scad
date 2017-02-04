@@ -25,6 +25,7 @@
 // All units are in mm
 
 use <Geeetech/jhead_peek.scad>
+use <mini_height_sensor.scad>
 
 geeetech_peek_clamp_diameter = 12;
 geeetech_peek_clamp_height = 4.5;
@@ -145,6 +146,39 @@ module scrappy_hotend_geeetech_peek()
     }
 }
 
+module scrappy_height_sensor_mount()
+{
+    height=geeetech_peek_bulk_length+geeetech_peek_nozzle_height-7;
+    translate([20, 0, -height]) {
+        difference()
+        {
+            translate([-5, -20+5, 0])
+                cube([5, 30, height]);
+            translate([-5, 0, (geeetech_peek_nozzle_height-6)/2])
+                scale([8, 25, (height - geeetech_peek_nozzle_height+6)*3]) sphere(r=0.5, $fn=fn);
+            # translate([-5.01, 0, height-5]) {
+                translate([0, -10, 0]) rotate([0, 90, 0]) drill(h=5, d=3-drill_tolerance*2);
+                translate([0, 10, 0]) rotate([0, 90, 0]) drill(h=5, d=3-drill_tolerance*2);
+            }
+        }
+        
+        translate([-5, 0, 0]) difference()
+        {
+            rotate([90, 0, 0]) rotate_extrude(angle=30, convexity=2) {
+                difference() {
+                    translate([0, -20+5]) square([5, 30]);
+                    scale([8, 25]) circle(r=0.5, $fn=fn);
+                }
+            }
+            translate([-5.1, -20.1+5, 0]) cube([10.2, 30.2, 5.1]);
+            translate([-5.1, -20.1+5, -5.1]) cube([5.1, 30.2, 5.1]);
+        }
+        
+        translate([0, 0, -5]) rotate([0, 0, 90]) mini_height_sensor_mount();
+    }
+}
+
 scrappy_hotend_geeetech_peek();
+scrappy_height_sensor_mount();
 % geeetech_jhead_peek();
 // vim: set shiftwidth=4 expandtab: //
