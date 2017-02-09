@@ -46,6 +46,9 @@ drill_tolerance = 0.25;
 
 screw_diameter = 1/8 * inch;
 
+m4_nut_flat=7;
+m4_nut_height=3.5;
+
 wall = 3;
 
 fn=30;
@@ -56,18 +59,18 @@ module drill(d=3, h=1, tolerance=drill_tolerance)
 }
 
 
-module screw_holes()
+module screw_holes(d=screw_diameter)
 {
     translate([0, wall, bottom_screw_height])
     {
         translate([-top_screw_distance/2, 0, vertical_screw_distance])
-            rotate([90, 0, 0]) drill(d=screw_diameter, h=20);
+            rotate([90, 0, 0]) drill(d=d, h=20);
         translate([top_screw_distance/2, 0, vertical_screw_distance])
-            rotate([90, 0, 0]) drill(d=screw_diameter, h=20);
+            rotate([90, 0, 0]) drill(d=d, h=20);
         translate([-bottom_screw_distance/2, 0, 0])
-            rotate([90, 0, 0]) drill(d=screw_diameter, h=20);
+            rotate([90, 0, 0]) drill(d=d, h=20);
         translate([bottom_screw_distance/2, 0, 0])
-            rotate([90, 0, 0]) drill(d=screw_diameter, h=20);
+            rotate([90, 0, 0]) drill(d=d, h=20);
     }
 }
 
@@ -81,7 +84,7 @@ module mounting_angle()
                     pow(vertical_screw_distance, 2));
     angle = atan(vertical_screw_distance / (bottom_screw_distance - top_screw_distance) * 2);
     
-    for (x = [-total_width/2+wall*4:1:-top_margin/2+wall])
+    for (x = [-total_width/2+1:1:-top_margin/2+wall])
     {
         z = -x/2-wall*2;
         translate([x, total_height-z, 0]) rotate([0, -90, 0])
@@ -89,7 +92,7 @@ module mounting_angle()
             difference()
             {
                 polygon([[0,0],[top_margin/2,z-wall],[top_margin/2,z],[0,z]]);
-                if (x > -total_width/2+wall*4+wall) {
+                if (x > -total_width/2+wall) {
                     polygon([[wall,wall*2],[top_margin/2-wall*3,z-wall],[wall,z-wall]]);
                 }
             }
@@ -137,11 +140,15 @@ module mounting_bracket_of(cut=false)
             
             // Lip
             linear_extrude(height=wall*3) 
-                translate([-top_margin/2, total_height-wall]) square([mounting_diameter, wall*3]);
+                translate([-total_width/2, total_height-wall]) square([(total_width-top_margin)/2+wall, wall*3]);
             
             // Mounting
             mounting_angle();
         }
+        
+        // Adjustement bolt retainer
+        translate([-middle_margin/2, -top_margin/2+m4_nut_flat/2+wall, total_height-wall*5])
+            cylinder(r=m4_nut_flat/sqrt(3)+wall, h=wall*4, $fn=6);
     }
     else
     {
@@ -149,6 +156,22 @@ module mounting_bracket_of(cut=false)
             cube([total_width*2, total_width*2, total_height]);
         translate([-total_width, -total_width*2-wall, total_height])
             cube([total_width*2, total_width*2, 1/8 * inch]);
+        
+        // Lip angle
+        tolerance = wall/4;;
+        translate([-total_width/2-0.1, -wall, total_height + 1/8*inch]) rotate([0, 90, 0]) rotate([0, 0, -90]) linear_extrude(height=total_width/2+0.2) {
+            polygon([[0, -tolerance], [wall*3, 0], [wall*3,1/8*inch], [0, 1/8*inch+tolerance]]);
+        }
+        
+        // Adjustement bolts
+        translate([-middle_margin/2, -top_margin/2+m4_nut_flat/2+wall, 0])
+            drill(d=4, h=total_height);
+        
+        // Adjustement bolt retainer
+        translate([-middle_margin/2, -top_margin/2+m4_nut_flat/2+wall, total_height-wall*4]) {
+            cylinder(r=m4_nut_flat/sqrt(3)+drill_tolerance, h=m4_nut_height+drill_tolerance*2, $fn=6);
+            translate([0, -m4_nut_flat/2-drill_tolerance, 0]) cube([m4_nut_flat+wall, m4_nut_flat+drill_tolerance*2, m4_nut_height+drill_tolerance*2]);
+        }
     } 
         
 }
@@ -159,7 +182,8 @@ module mounting_bracket()
     {
         mounting_bracket_of(cut=false);
         mounting_bracket_of(cut=true);
-        screw_holes();
+        screw_holes(d=screw_diameter);
+        translate([0, -wall-0.1, 0]) screw_holes(d=screw_diameter+wall*2);
     }
 
 }

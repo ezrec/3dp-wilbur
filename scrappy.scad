@@ -164,6 +164,23 @@ module scrappy_bearing_cap(bottom=false, nut=true)
     }
 }
 
+module scrappy_bearing_sleeve(bearing_sleeve_wall=1.6, tolerance=drill_tolerance)
+{
+    difference()
+    {
+        union()
+        {
+            cylinder(d=bearing_diameter+bearing_sleeve_wall*2, h=belt_width, $fn=fn*2);
+            translate([0, 0, -bearing_sleeve_wall])
+                cylinder(d=bearing_diameter+bearing_sleeve_wall*4, h=bearing_sleeve_wall+0.01, $fn=fn*2);
+        }
+        translate([0, 0, belt_width-bearing_width])
+            cylinder(d1=bearing_diameter+tolerance, d2=bearing_diameter+tolerance*3, h=belt_width+0.1, $fn=fn*2);
+        translate([0, 0, -bearing_sleeve_wall-0.01])
+            cylinder(d=bearing_diameter-bearing_sleeve_wall*2, h=bearing_sleeve_wall+belt_width, $fn=fn*2);
+    }
+}
+
 module bearing()
 {
 	color([0.7, 0.7, 0.7]) difference()
@@ -283,6 +300,37 @@ module carriage_bearing(h=40, d=8)
     }
 }
 
+module lm8uu_bearing_of(h=40, cut=false)
+{
+    // LM8UU bearing
+    id = 8;
+    od = 15;
+    l = 24;
+    
+    cd = od + rod_wall*2;
+    
+    translate([0, h/2, 0]) if (!cut)
+    {
+        translate([0, -h+rod_pocket, 0]) rod_pocket_of(d=od, h=h, cut=false);
+    }
+    else
+    {
+        rotate([90, 0, 0]) {
+            translate([0, 0, -0.1])
+                cylinder(d=id, h=h+0.2, $fn=fn);
+            translate([0, 0, rod_wall])
+                cylinder(d=od+2*grease_wall, h = l, $fn=fn);
+            translate([0, 0, h-l-rod_wall])
+                cylinder(d=od+2*grease_wall, h = l, $fn=fn);
+            translate([-od/2-grease_wall, -cd/2-0.1, rod_wall])
+                cube([od+grease_wall*2, cd/2, l]);
+            translate([-od/2-grease_wall, -cd/2-0.1, h-l-rod_wall])
+                cube([od+grease_wall*2, cd/2, l]);
+        }
+    }
+}
+
+
 module motor_bracket(cut=false)
 {
     translate([0, nema_mount_width/2 + wall, -nema_mount_width/2-wall])
@@ -388,8 +436,11 @@ module y_motor_of(cut=false)
         y_mount_of(cut=cut);
         
     // Secondary pulley
-    translate([y_belt_gap/2-bearing_diameter/2, nema_mount_width/2 + wall - (bearing_diameter - pulley_belt_gap)/2, 0])
-        bearing_holder_of(h=z_block_size/2, cut=cut, teeth=true);
+    if (y_belt_gap > bearing_holder_diameter)
+    {
+        translate([y_belt_gap/2-bearing_diameter/2, nema_mount_width/2 + wall - (bearing_diameter - pulley_belt_gap)/2, 0])
+            bearing_holder_of(h=z_block_size/2, cut=cut, teeth=true);
+    }
     
 }
 
@@ -731,7 +782,11 @@ module scrappy_block_of(cut=false)
             rod_pocket_of(d=rod_x[1], h=rod_pocket, cut=cut);
     }
     
-    carriage_bearing_of(h=x_rod_gap + bearing_holder_diameter, d=rod_y[1], cut=cut);
+    lm8uu_bearing_of(h=x_rod_gap + bearing_holder_diameter, cut=cut);
+    if (cut) {
+        translate([-100, -100, -z_block_size/2-100])
+            cube([200, 200, 100.01]);
+    }
     
     // Bearings
     translate([y_belt_gap/2+bearing_diameter/2, 0, -z_block_size/2])

@@ -7,10 +7,12 @@ SCAD := \
 	scrappy_z_bracket.scad \
 	scrappy_z_clip.scad \
 	scrappy_power_box.scad \
-	scrappy_hotend.scad
+	scrappy_hotend_e3d.scad \
+	scrappy_hotend_geeetech.scad
 
 MODELS := \
     scrappy_bearing_cap.stl \
+    scrappy_bearing_sleeve.stl \
     scrappy_y_motor_min.stl \
     scrappy_y_motor_max.stl \
     scrappy_x_cap.stl \
@@ -24,7 +26,9 @@ MODELS := \
     scrappy_z_endstop_holder.stl \
     scrappy_power_box.stl \
     scrappy_hotend_geeetech_peek.stl \
-    scrappy_height_sensor_mount.stl \
+    scrappy_sensor_geeetech_peek.stl \
+    scrappy_hotend_e3d_v6.stl \
+    scrappy_sensor_e3d_v6.stl \
     scrappy_stiffener_clip.stl
 
 

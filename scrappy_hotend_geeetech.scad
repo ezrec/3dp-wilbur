@@ -56,54 +56,21 @@ module drill(d=3, h=1, tolerance=drill_tolerance)
     translate([0, 0, -0.1]) cylinder(d=d + tolerance*2, h=h+0.2, $fn =fn);
 }
 
-module blower_fan_of(cut=false)
-{
-    if (!cut)
-    {
-        // Mounting posts
-        translate([0, blower_fan_width/2 - blower_fan_mounting_post_height, blower_fan_radius])
-        for (x=[0:2]) rotate([0, 45+x*90, 0]) translate([blower_fan_mounting_radius, 0, 0])
-                rotate([-90, 0, 0]) cylinder(d=blower_fan_mounting_post_diameter, h=blower_fan_mounting_post_height, $fn=fn);
-        
-        // Mounting
-        translate([-blower_fan_radius, blower_fan_width/2-0.1, 0])
-            cube([blower_fan_radius*2, wall, blower_fan_radius*2]);
-    }
-    else
-    {
-        translate([0, -blower_fan_width/2, blower_fan_radius]) {
-            rotate([-90, 0, 0]) cylinder(r=blower_fan_radius, h=blower_fan_width, $fn=fn);
-            translate([0, 0, blower_fan_radius - blower_out_height])
-                cube([blower_fan_radius, blower_fan_width, blower_out_height]);
-        }
-        
-        // Mounting drills
-        translate([0, blower_fan_width/2 - blower_fan_mounting_post_height, blower_fan_radius])
-        for (x=[0:2]) rotate([0, 45+x*90, 0]) translate([blower_fan_mounting_radius, 0, 0])
-                rotate([-90, 0, 0]) drill(d=3, h=blower_fan_mounting_post_height+100, $fn=fn);
-        
-        // Airflow
-        translate([0, -blower_fan_width/2, blower_fan_radius])
-            rotate([-90, 0, 0]) cylinder(r=blower_fan_airflow_radius, h=blower_fan_width+100+0.2, $fn=fn);
-    }
-}
-            
 module hotend_geeetech_peek_of(cut=false)
 {
+    fan_angle = -14;
+    
     if (!cut)
     {
-        translate([0, 0, geeetech_peek_clamp_height/2]) cube([40, 40, geeetech_peek_clamp_height], center=true);
-        hull()
-        {
-        translate([-20, 20-1, 0]) cube([40, 1,geeetech_peek_clamp_height ]);
-        // Mounting
-        translate([-blower_fan_radius - geeetech_peek_bulk_diameter/2 - wall, 0, -blower_fan_radius*2])
-            translate([-blower_fan_radius, blower_fan_width/2-0.1, 0])
-            cube([blower_fan_radius*2, 1, blower_fan_radius*2]);
-        }
+        translate([-0.01, 0, geeetech_peek_clamp_height/2]) cube([40+0.02, 40, geeetech_peek_clamp_height], center=true);
         
-        // Extra mounting bracket
-        translate([20-0.01, -20, -10]) cube([wall, 40, 10+geeetech_peek_clamp_height]);        
+        // Extra mounting bracket - rear
+        translate([-20, 0, wall*sin(fan_angle)])
+            rotate([0, fan_angle, 0]) 
+                translate([0, -20, -10]) cube([wall, 40, 10+geeetech_peek_clamp_height]);        
+
+        // Extra mounting bracket - front
+        rotate([0, 0, -90]) translate([20, -15, -10]) cube([wall, 30, 10+geeetech_peek_clamp_height]);        
     }
     else
     {
@@ -112,7 +79,7 @@ module hotend_geeetech_peek_of(cut=false)
             drill(d=geeetech_peek_bulk_diameter, h=geeetech_peek_bulk_length);
         
         // Mounting slot
-        translate([0, 0, -0.01]) linear_extrude(height=geeetech_peek_clamp_height+0.02) hull()
+        rotate([0, 0, 90]) translate([0, 0, -0.01]) linear_extrude(height=geeetech_peek_clamp_height+0.02) hull()
         {
             circle(d=geeetech_peek_clamp_diameter + drill_tolerance*2+0.1);
             translate([0, -100, 0])
@@ -126,16 +93,29 @@ module hotend_geeetech_peek_of(cut=false)
                 rotate([0, 0, 45+r]) cylinder(r=m4_nut_flat/sqrt(3)+drill_tolerance, h=m4_nut_height/2+20+0.1, $fn=6);
         }
         
-        // Extra mounting bracket drills
-        translate([20-0.01, 0, -5]) {
+        // Fan mounting bracket drills - 24mm, m3
+        translate([-20, 0, wall*sin(fan_angle)]) {
+            rotate([0, fan_angle, 0]) {
+                translate([0, 0, -5]) {
+                    translate([0, -12, 0]) rotate([0, 90, 0]) drill(h=5, d=3);
+                    translate([0, 12, 0]) rotate([0, 90, 0]) drill(h=5, d=3);
+                }
+                translate([0, 0, -wall-30/2]) {
+                    rotate([0, 90, 0]) {
+                        drill(d=29, h=wall);
+                        % translate([0, 0, -wall]) drill(d=29, h=wall);
+                    }
+                }
+            }
+        }
+        
+        // Front mounting bracket drills - 20mm, m3
+        rotate([0, 0, -90]) translate([20, 0, -5]) {
             translate([0, -10, 0]) rotate([0, 90, 0]) drill(h=5, d=3);
             translate([0, 10, 0]) rotate([0, 90, 0]) drill(h=5, d=3);
         }
     }
-              
-    translate([-blower_fan_radius - geeetech_peek_bulk_diameter/2 - wall, 0, -blower_fan_radius*2])
-        blower_fan_of(cut);
- }
+}
 
 module scrappy_hotend_geeetech_peek()
 {
@@ -146,39 +126,25 @@ module scrappy_hotend_geeetech_peek()
     }
 }
 
-module scrappy_height_sensor_mount()
+module scrappy_sensor_geeetech_peek()
 {
     height=geeetech_peek_bulk_length+geeetech_peek_nozzle_height-7;
     translate([20, 0, -height]) {
         difference()
         {
-            translate([-5, -20+5, 0])
-                cube([5, 30, height]);
-            translate([-5, 0, (geeetech_peek_nozzle_height-6)/2])
-                scale([8, 25, (height - geeetech_peek_nozzle_height+6)*3]) sphere(r=0.5, $fn=fn);
-            # translate([-5.01, 0, height-5]) {
-                translate([0, -10, 0]) rotate([0, 90, 0]) drill(h=5, d=3-drill_tolerance*2);
-                translate([0, 10, 0]) rotate([0, 90, 0]) drill(h=5, d=3-drill_tolerance*2);
+            translate([-wall, -20+5, 0])
+                cube([wall, 30, height]);
+            translate([-wall-0.01, 0, height-5]) {
+                translate([0, -10, 0]) rotate([0, 90, 0]) drill(h=wall, d=3-drill_tolerance*2);
+                translate([0, 10, 0]) rotate([0, 90, 0]) drill(h=wall, d=3-drill_tolerance*2);
             }
         }
-        
-        translate([-5, 0, 0]) difference()
-        {
-            rotate([90, 0, 0]) rotate_extrude(angle=30, convexity=2) {
-                difference() {
-                    translate([0, -20+5]) square([5, 30]);
-                    scale([8, 25]) circle(r=0.5, $fn=fn);
-                }
-            }
-            translate([-5.1, -20.1+5, 0]) cube([10.2, 30.2, 5.1]);
-            translate([-5.1, -20.1+5, -5.1]) cube([5.1, 30.2, 5.1]);
-        }
-        
+
         translate([0, 0, -5]) rotate([0, 0, 90]) mini_height_sensor_mount();
     }
 }
 
 scrappy_hotend_geeetech_peek();
-scrappy_height_sensor_mount();
+rotate([0, 0, -90]) scrappy_sensor_geeetech_peek();
 % geeetech_jhead_peek();
 // vim: set shiftwidth=4 expandtab: //
