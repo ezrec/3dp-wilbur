@@ -18,13 +18,15 @@ MODELS := \
     scrappy_x_cap.stl \
     scrappy_sled.stl \
     scrappy_block.stl \
-    scrappy_y_rail_cap.stl \
+    scrappy_y_rail_min.stl \
+    scrappy_y_rail_max.stl \
     scrappy_z_bracket_left.stl \
     scrappy_z_bracket_right.stl \
     scrappy_z_clip.stl \
     scrappy_z_standoff.stl \
     scrappy_z_endstop_holder.stl \
     scrappy_power_box.stl \
+    scrappy_control_box.stl \
     scrappy_hotend_geeetech_peek.stl \
     scrappy_sensor_geeetech_peek.stl \
     scrappy_hotend_e3d_v6.stl \

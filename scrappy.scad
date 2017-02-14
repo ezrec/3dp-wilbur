@@ -388,14 +388,17 @@ module y_mount_of(cut=false)
 module y_motor_of(cut=false)
 {
     rod_offset = (mdf_length - rod_y[0])/2;
-    mount_offset = -y_belt_gap/2+pulley_belt_gap/2;
+    mount_offset = y_belt_gap/2-pulley_belt_gap/2;
+    guide_offset = -rod_pocket+bearing_holder_diameter/2-rod_offset;
     
     if (!cut)
     {
-        linear_extrude(height = z_block_size/2) hull() {
-            translate([mount_offset+nema_mount_width/2+wall-0.1, 0])
-                square([0.1, nema_mount_width + wall*2]);
-            translate([y_belt_gap/2-bearing_diameter/2, nema_mount_width/2 + wall - (bearing_diameter - pulley_belt_gap)/2])
+        translate([0, 0, -z_block_size/2]) linear_extrude(height = z_block_size) hull() {
+            translate([-0.1, -rod_pocket-rod_offset])
+                square([0.1, nema_mount_width + wall + rod_offset + rod_pocket]);
+            translate([0, 0])
+                square([nema_mount_width-wall, 0.1]);
+            translate([-mount_offset, guide_offset])
                 circle(d=bearing_holder_diameter);
         }
     }
@@ -438,15 +441,15 @@ module y_motor_of(cut=false)
     // Secondary pulley
     if (y_belt_gap > bearing_holder_diameter)
     {
-        translate([y_belt_gap/2-bearing_diameter/2, nema_mount_width/2 + wall - (bearing_diameter - pulley_belt_gap)/2, 0])
-            bearing_holder_of(h=z_block_size/2, cut=cut, teeth=true);
+        translate([-mount_offset, guide_offset, -z_block_size/2])
+            bearing_holder_of(h=z_block_size, cut=cut, teeth=true);
     }
     
 }
 
 module y_motor()
 {
-    mount_offset = -y_belt_gap/2+pulley_belt_gap/2;
+    mount_offset = y_belt_gap/2-pulley_belt_gap/2;
     
     difference()
     {
@@ -511,19 +514,45 @@ module y_rail_cap_of(cut=false)
         }
     }
             
+    // Zip clip
+    translate([-mdf_width/2-wall, -wall, -z_block_size/2-z_block_offset-y_mount_height]) rotate([0, 0, 90])
+    {
+        if (!cut) {
+             cube([wall*2, y_mount_depth, y_mount_height + wall]);
+        } else union() {
+            r = y_mount_depth;
+            h = y_mount_height;
+            w = wall*2;
+            for (i=[1:3]) translate([w/2, r/2, h/4*i]) {
+                translate([-r-w/2, 0, 0])
+                    rotate([0, 90, 0])
+                        drill(h=r*2+w, d=4);
+                translate([-w/2+nut_wall, 0, 0])
+                    rotate([0, -90, 0])
+                        cylinder(r=m4_nut_flat/sqrt(3)+drill_tolerance, h=r, $fn=6);
+                translate([w/2-nut_wall, 0, 0])
+                    rotate([0, 90, 0])
+                        cylinder(r=m4_nut_flat/sqrt(3)+drill_tolerance, h=r, $fn=6);
+            }                   }
+    }
     
     // Bracket to attach to the MDF
     translate([0, 0, -z_block_size/2 - z_block_offset])
         y_mount_of(cut=cut);    
 }
 
-module scrappy_y_rail_cap()
+module scrappy_y_rail_min()
 {
     difference()
     {
         y_rail_cap_of(cut=false);
         y_rail_cap_of(cut=true);
     }
+}
+
+module scrappy_y_rail_max()
+{
+    mirror([0, 1, 0]) scrappy_y_rail_min();
 }
 
 module x_cap_of(cut=false)
