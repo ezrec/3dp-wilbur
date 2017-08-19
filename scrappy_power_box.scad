@@ -226,20 +226,17 @@ module control_box_of(cut=false)
             union()
             {
                 translate([-control_box_size[0]/2-wall, -wall, -wall])
-                    cube([control_box_size[0]+wall*2, control_box_size[1]+wall*2, control_box_size[2]+wall]);
-                translate([0, control_box_size[1]*2+wall*2, wall]) 
-                    rotate([0, 0, 180]) geeetech_lcd2004a_holder(wall=wall, height=wall*2, width = control_box_size[1]+wall*2);
+                    cube([control_box_size[0]+wall*2, control_box_size[1]+wall, control_box_size[2]+wall*2]);
+                translate([0, control_box_size[1]*2+wall*2-0.01, -wall]) 
+                    rotate([0, 0, 180]) geeetech_lcd2004a_holder(wall=wall, height=control_box_size[2]+wall*2, width = control_box_size[1]+wall*2);
             }
+            translate([-control_box_size[0]/2, 0, -wall-0.1])
+                cube([control_box_size[0], control_box_size[1]+wall+0.01, control_box_size[2]+0.2]);
             translate([-control_box_size[0]/2, 0, 0])
-                cube([control_box_size[0], control_box_size[1]+wall+0.1, control_box_size[2]+wall*2]);
+                cube([control_box_size[0], control_box_size[1], control_box_size[2]+wall*2+0.1]);
         }
         
-        translate([-control_box_size[0]/2+arduino_x_clearance, 5, -0.1])
-            arduino_post(d=5, height=wall*2+0.1, wall=1);
-        
-        translate([0, 0, control_box_size[2]-5])
-            lip_drill(d=wall*4, h=5);
-        
+        lip_drill(d=3+wall*2, h=control_box_size[2]);
     }
     else
     {
@@ -250,9 +247,6 @@ module control_box_of(cut=false)
         
         translate([-control_box_size[0]/2+arduino_x_clearance, 5, wall*2])
             arduino_clearance();
-        
-        translate([-control_box_size[0]/2+arduino_x_clearance, 5, -wall])
-            linear_extrude(height=wall*3+0.2) arduino_drill(d=2.8);
         
         r=20*sin(45);
         translate([0, -wall, power_box_size[2]/2]) {
@@ -265,11 +259,30 @@ module control_box_of(cut=false)
 
         }
         
-        translate([0, 0, control_box_size[2]-5])
-            lip_drill(d=2.8, h=5);
+        lip_drill(d=3.0, h=control_box_size[2]);
     }
 }
+
+module scrappy_control_box_base()
+{
+    translate([0, wall, 0]) difference()
+    {
+        union()
+        {
+            translate([-control_box_size[0]/2+0.25, 0.25, -wall])
+                        cube([control_box_size[0]-0.5, control_box_size[1]+wall, wall]);
+            translate([-control_box_size[0]/2+arduino_x_clearance, 5, -0.1])
+                arduino_post(d=5, height=wall*2+0.1, wall=1);      
+        }
+        translate([-control_box_size[0]/2+arduino_x_clearance, 5, -wall])
+            linear_extrude(height=wall*3+0.2) arduino_drill(d=2.8);
     
+        translate([0, 0, -wall-0.1])
+            lip_drill(d=3.25, h=wall+0.2);
+    }
+
+}
+
 module scrappy_control_box()
 {
     difference()
@@ -286,25 +299,30 @@ module scrappy_control_box()
 
 module scrappy_control_box_lid()
 {
-    difference()
+    gap = 0.5;
+    translate([0, 0, control_box_size[2]]) difference()
     {
         union()
         {
-            translate([0, wall, 0]) lip_drill(d=9, h=wall*2, $fn=30);
-            translate([0, control_box_size[1]/2+wall, wall/2])
-                cube([control_box_size[0]+wall*2, control_box_size[1]+wall*2, wall], center=true);
+            translate([0, 35, wall-0.01]) scale([0.5, 0.5, 0.5]) import("minion-dave.stl");
+            translate([-control_box_size[0]/2+gap, wall + gap, -0.1])
+                cube([control_box_size[0]-gap*2, control_box_size[1]-gap*2, wall+0.1]);
         }
-        translate([0, wall, 0]) lip_drill(d=3.25, h=10);
+        translate([0, wall, -0.1]) lip_drill(d=3.25, h=wall+1.2);
+        translate([-control_box_size[0]/2, wall, -50])
+            cube([control_box_size[0], control_box_size[1], 50]);
     }
 }
+
+!scrappy_control_box_lid();
 
 scrappy_power_box();
 
 translate([0, power_box_size[1]+wall+m4_nut_height*2, 0])
 {
     scrappy_control_box();
-    translate([0, 0, control_box_size[2]])
-        scrappy_control_box_lid();
+    scrappy_control_box_base();
+    scrappy_control_box_lid();    
 }
 
 // vim: set shiftwidth=4 expandtab: //

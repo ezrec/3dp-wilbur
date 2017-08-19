@@ -87,28 +87,32 @@ module geeetech_lcd2004a_mounts(wall=4)
     }
 }
 
-module geeetech_lcd2004a_holder(angle=40, width=80, height=10, wall=3)
+module geeetech_lcd2004a_holder(angle=40, width=80, height=100, wall=3)
 {
     old_size=geeetech_lcd2004a_size();
     size = [old_size[0], old_size[1] + 10, old_size[2]];
-        
-    // Polyline 
-    difference()
-    {
-        translate([-size[0]/2-wall, 0, 0]) rotate([0, 0, 90]) rotate([90, 0, 0]) difference()
-        {
-             linear_extrude(height=size[0]+wall*2) polygon([[0, 0], [0, -height], [width, -height], [width, sin(angle)*(size[1]+wall*2)], [cos(angle)*(size[1]+wall*2), sin(angle)*(size[1]+wall*2)]]);
-             translate([0, -0.01, wall]) linear_extrude(height=size[0]) polygon([[wall+cos(angle)*wall, 0], [wall+cos(angle)*wall, -height], [width-wall, -height], [width-wall,sin(angle)*size[1]], [cos(angle)*size[1]+wall+cos(angle)*wall, sin(angle)*size[1]]]);
-        }
-        
-        translate([0, wall+wall*cos(angle)+size[2]+size[2]*cos(angle) - 0.5, 0]) rotate([angle, 0, 0]) 
-            geeetech_lcd2004a();
-    }
+    h = height - sin(angle)*(size[1]+wall*2);
 
-    translate([0, wall+wall*cos(angle)+size[2]+size[2]*cos(angle) - 0.5, 0]) rotate([angle, 0, 0]) 
+    translate([0, 0, h])
     {
-        geeetech_lcd2004a_mounts();
-        % geeetech_lcd2004a();
+        // Polyline
+        difference()
+        {
+            translate([-size[0]/2-wall, 0, 0]) rotate([0, 0, 90]) rotate([90, 0, 0]) difference()
+            {
+                 linear_extrude(height=size[0]+wall*2) polygon([[0, 0], [0, -h], [width, -h], [width, sin(angle)*(size[1]+wall*2)], [cos(angle)*(size[1]+wall*2), sin(angle)*(size[1]+wall*2)]]);
+                 translate([0, -0.01, wall]) linear_extrude(height=size[0]) polygon([[wall+cos(angle)*wall, 0], [wall+cos(angle)*wall, -h], [width-wall, -h], [width-wall,sin(angle)*size[1]], [cos(angle)*size[1]+wall+cos(angle)*wall, sin(angle)*size[1]]]);
+            }
+
+            translate([0, wall+wall*cos(angle)+size[2]+size[2]*cos(angle) - 0.5, 0]) rotate([angle, 0, 0])
+                geeetech_lcd2004a();
+        }
+
+        translate([0, wall+wall*cos(angle)+size[2]+size[2]*cos(angle) - 0.5, 0]) rotate([angle, 0, 0])
+        {
+            geeetech_lcd2004a_mounts();
+            % geeetech_lcd2004a();
+        }
     }
 }
 

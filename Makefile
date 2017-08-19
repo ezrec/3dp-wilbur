@@ -27,10 +27,13 @@ MODELS := \
     scrappy_z_endstop_holder.stl \
     scrappy_power_box.stl \
     scrappy_control_box.stl \
+    scrappy_control_box_base.stl \
+    scrappy_control_box_lid.stl \
     scrappy_hotend_geeetech_peek.stl \
     scrappy_sensor_geeetech_peek.stl \
     scrappy_hotend_e3d_v6.stl \
     scrappy_sensor_e3d_v6.stl \
+    scrappy_fan_e3d_v6.stl \
     scrappy_stiffener_clip.stl
 
 
