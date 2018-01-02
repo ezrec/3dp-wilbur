@@ -14,67 +14,79 @@
 hardware=true;
 fn=30;
 
-rod_x = [ 400, 8 ];
-rod_y = [ 400, 8 ];
-rod_slide = [400, 6.2];
+// Units
+in = 25.4;
+mm = 1.0;
 
-nozzle_diameter = 0.8;
+// colors
+color_metal = [0.5, 0.5, 0.5, 0.5];
+
+build_z = 200 * mm;
+
+rod_x = [ 400 * mm, 8 * mm];
+rod_y = [ 400 * mm, 8 * mm ];
+rod_slide = [400 * mm, 1/4 * in];
+
+nozzle_diameter = 0.8 * mm;
 
 // Depth of the pocket for rods
-rod_pocket = 20;
+rod_pocket = 20 * mm;
 
 // Length of the X axis between the MDF boards
-x_length = 280;
+x_length = 280 * mm;
 
-belt_width = 6;
-belt_thickness = 2;
-belt_tolerance = 0.25;
+// Press-fit tolerance
+press_tolerance = 0.1 * mm;
 
-m4_nut_flat=7;
-m4_nut_height=3.5;
+belt_width = 6 * mm;
+belt_thickness = 2 * mm;
+belt_tolerance = 0.25 * mm;
 
-m8_nut_flat = 13;
-m8_nut_height = 7;
+m4_nut_flat=7 * mm;
+m4_nut_height=3.5 * mm;
 
-drill_tolerance=0.25;
-nut_wall = 1.5;
+m8_nut_flat = 13 * mm;
+m8_nut_height = 7 * mm;
 
-mdf_width = 16;
-mdf_length = 405;
-mdf_tolerance = 0.2;
+drill_tolerance=0.25 * mm;
+nut_wall = 1.5 * mm;
+
+mdf_width = 16.5 * mm;
+mdf_length = 405 * mm;
+mdf_tolerance = 0.2 * mm;
 
 // Wall size (structural)
-wall = 3;
+wall = 3 * mm;
 // Wall size (rod mounting)
-rod_wall = 3;
+rod_wall = 3 * mm;
 // Grease pocket size
-grease_wall = 1;
+grease_wall = 1 * mm;
 
 // Hotend fan width
-hotend_fan_diameter = 30;
-hotend_fan_depth = 10.5;
+hotend_fan_diameter = 30 * mm;
+hotend_fan_depth = 10.5 * mm;
 
-hotend_latch_diameter = 16;
-hotend_latch_height = 6.5;
-hotend_bulk_diameter = 22;
-hotend_height = 33;
+hotend_latch_diameter = 16 * mm;
+hotend_latch_height = 6.5 * mm;
+hotend_bulk_diameter = 22 * mm;
+hotend_height = 33 * mm;
 
 // Distance from post to M3 hole
-nema_mount_radius = 22;
-nema_mount_width = 44;
-nema_mount_height = 44;
-nema_motor_shaft = 5;
+nema_mount_radius = 22 * mm;
+nema_mount_width = 44 * mm;
+nema_mount_height = 44 * mm;
+nema_motor_shaft = 5 * mm;
 
 // Exposed pulley height
-pulley_height = 14;
-pulley_diameter = 16;
-pulley_belt_gap = 10;
+pulley_height = 14 * mm;
+pulley_diameter = 16 * mm;
+pulley_belt_gap = 10 * mm;
 
 // Bearing diameter and height
-bearing_diameter = 13;
-bearing_width = 5;
-bearing_bore = 4;
-bearing_wall = 1;
+bearing_diameter = 13 * mm;
+bearing_width = 5 * mm;
+bearing_bore = 4 * mm;
+bearing_wall = 1 * mm;
 
 bearing_holder_diameter = bearing_diameter+wall;
 
@@ -98,7 +110,7 @@ module drill(d=3, h=1, tolerance=drill_tolerance)
     translate([0, 0, -0.1]) cylinder(d=d + tolerance*2, h=h+0.2, $fn =fn);
 }
 
-switch_size = [10, 4.3, 3.75];
+switch_size = [10 * mm, 4.3 * mm, 3.75 * mm];
 
 module switch()
 {
@@ -133,10 +145,10 @@ module flanged()
 	{
 		union()
 		{
-			cylinder(d=15, h=1, $fn=fn);
-		   cylinder(d=13, h=5, $fn=fn);
+			cylinder(d=15 * mm, h=1, $fn=fn);
+		   cylinder(d=13 * mm, h=5 *mm, $fn=fn);
 		}
-	   drill(d=4, h = 5);
+	   drill(d=4 * mm, h = 5 * mm);
 	}
 }
 
@@ -215,9 +227,9 @@ module bearing_holder_of(h=4, cut=false)
 
 module pulley()
 {
-    height = 12;
-    diameter = 16;
-    bore = 5;
+    height = 12 * mm;
+    diameter = 16 * mm;
+    bore = 5 * mm;
     
     color([0.7, 0.7, 0.0]) difference()
     {
@@ -270,7 +282,7 @@ module rod_pocket(d=8, h=20)
     }
 }
 
-module carriage_bearing_of(h=40, d=8, cut=false)
+module carriage_bearing_of(h=40 * mm, d=8 * mm, cut=false)
 {
     cd = d + rod_wall*2;
     
@@ -291,7 +303,7 @@ module carriage_bearing_of(h=40, d=8, cut=false)
     }
 }
 
-module carriage_bearing(h=40, d=8)
+module carriage_bearing(h=40 * mm, d=8 * mm)
 {
     difference()
     {
@@ -300,12 +312,15 @@ module carriage_bearing(h=40, d=8)
     }
 }
 
-module lm8uu_bearing_of(h=40, cut=false)
+lm8uu_od = 15 * mm;
+lm8uu_l = 24 * mm;
+
+module lm8uu_bearing_of(h=40 * mm, cut=false)
 {
     // LM8UU bearing
-    id = 8;
-    od = 15;
-    l = 24;
+    id = 8 * mm;
+    od = lm8uu_od;
+    l = lm8uu_l;
     
     cd = od + rod_wall*2;
     
@@ -349,7 +364,7 @@ module motor_bracket(cut=false)
     }
 }
 
-belt_span = 8;
+belt_span = 8 * mm;
 
 y_mount_height = nema_mount_height + wall*2 - z_block_offset - z_block_size;
 y_mount_depth = (nema_mount_width - mdf_width+ wall*2)/2;
@@ -595,12 +610,12 @@ module scrappy_x_cap()
     }
 }
 
-gt2_belt_thickness = 1;
-gt2_belt_pitch = 2.0;
-gt2_belt_tooth_radius = 0.8;
-gt2_belt_compression = 0.1;
+gt2_belt_thickness = 1 * mm;
+gt2_belt_pitch = 2.0 * mm;
+gt2_belt_tooth_radius = 0.8 * mm;
+gt2_belt_compression = 0.1 * mm;
 
-module gt2_belt_loop(r=10, outside=true)
+module gt2_belt_loop(r=10 * mm, outside=true)
 {
     delta_r = outside ? gt2_belt_tooth_radius : 0;
     difference()
@@ -641,7 +656,7 @@ module gt2_belt_arc(teeth=15, angle=180, outisde=true)
     }
 }
 
-module gt2_belt_line(l=20, outside=true)
+module gt2_belt_line(l=20 * mm, outside=true)
 {
     delta_y=outside ? gt2_belt_tooth_radius - gt2_belt_compression : gt2_belt_commpression;
     translate([0, gt2_belt_compression+delta_y, 0]) square([l, gt2_belt_thickness - gt2_belt_compression]);
@@ -652,7 +667,7 @@ module gt2_belt_line(l=20, outside=true)
     }
 }
 
-module gt2_belt_holder_of(h=10, teeth=10, cut=false, outside=true)
+module gt2_belt_holder_of(h=10 * mm, teeth=10, cut=false, outside=true)
 {
     r = gt2_belt_radius(teeth=teeth, angle=180)+gt2_belt_thickness;
     d = r*2+wall*2;
@@ -676,7 +691,7 @@ module gt2_belt_holder_of(h=10, teeth=10, cut=false, outside=true)
     }
 }
 
-module gt2_belt_holder(h=10, teeth=5)
+module gt2_belt_holder(h=10 * mm, teeth=5)
 {
     difference()
     {
@@ -713,16 +728,18 @@ module scrappy_sled_of(cut=false)
         }
         
         // Zip-tie points or bolt - 10mm apart, M4
-        translate([s_size[0]/2+0.1, -5, 4])
+        ziptie_spacing = 10 * mm;
+        ziptie_drill = 4 * mm;
+        translate([s_size[0]/2+0.1, -ziptie_spacing/2, ziptie_drill])
             rotate([0, -90, 0]) {
-                drill(d=4, h = s_size[1]/2);
+                drill(d=ziptie_drill, h = s_size[1]/2);
                 translate([0, 0, 11])
                     cylinder(r=m4_nut_flat/sqrt(3)+drill_tolerance, h = s_size[1]/2-10, $fn=6);
             }
             
-        translate([s_size[0]/2+0.1, 5, 4])
+        translate([s_size[0]/2+0.1, ziptie_spacing/2, ziptie_drill])
             rotate([0, -90, 0]) {
-                drill(d=4, h = s_size[1]/2);
+                drill(d=ziptie_drill, h = s_size[1]/2);
                 translate([0, 0, 11])
                     cylinder(r=m4_nut_flat/sqrt(3)+drill_tolerance, h = s_size[1]/2-10, $fn=6);
             }
