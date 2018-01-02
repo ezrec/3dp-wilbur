@@ -103,7 +103,7 @@ y_belt_gap = (bearing_holder_diameter + rod_y[1]/2 + grease_wall)*2;
 
 pulley_gap = x_rod_gap + bearing_diameter;
 
-mdf_x_offset = y_belt_gap/2 + bearing_diameter/2 + rod_pocket;
+mdf_x_offset = y_belt_gap/2 + bearing_diameter/2 + rod_pocket - mdf_width;
 
 module drill(d=3, h=1, tolerance=drill_tolerance)
 {
