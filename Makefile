@@ -15,6 +15,11 @@ MODELS := \
     scrappy_bearing_sleeve.stl \
     scrappy_y_motor_min.stl \
     scrappy_y_motor_max.stl \
+    scrappy_z_motor.stl \
+    scrappy_z_edge.stl \
+    scrappy_z_center.stl \
+    scrappy_z_foot.stl \
+    scrappy_z_cap.stl \
     scrappy_x_cap.stl \
     scrappy_sled.stl \
     scrappy_block.stl \
