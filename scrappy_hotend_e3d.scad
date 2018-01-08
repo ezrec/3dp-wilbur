@@ -34,7 +34,7 @@ e3d_v6_clamp_height = 5.75;
 e3d_v6_bulk_diameter = 16;
 
 e3d_v6_bulk_length = 35.5;
-e3d_v6_nozzle_height = 17;
+function e3d_v6_nozzle_height(volcano = false) = 5.5 + (volcano ? 20 : 11.5);
 
 m3_nut_flat=5.5;
 m3_nut_height=2.25;
@@ -60,6 +60,8 @@ module e3d_v6_duct()
 
 module hotend_e3d_v6_of(cut=false)
 {
+    threaded_screw_d = 2.2;
+    
     if (!cut)
     {
         translate([-0.01, 0, e3d_v6_clamp_height/2]) cube([40+0.02, 40, e3d_v6_clamp_height], center=true);
@@ -90,28 +92,28 @@ module hotend_e3d_v6_of(cut=false)
         for (r = [0:90:270]) rotate([0, 0, 45+r]) translate([20*sin(45), 0, 0]) {
             drill(h=e3d_v6_clamp_height, d=4);
             translate([0, 0, -20])
-                rotate([0, 0, 45+r]) cylinder(r=m4_nut_flat/sqrt(3)+drill_tolerance, h=m4_nut_height/2+20+0.1, $fn=6);
+                rotate([0, 0, 30]) rotate([0, 0, 45+r]) cylinder(r=m4_nut_flat/sqrt(3)+drill_tolerance, h=m4_nut_height+20+0.1, $fn=6);
         }
         
-        // Front mounting bracket drills - 24mm, m3
+        // Front mounting bracket drills
         rotate([0, 0, -90]) translate([20-wall, 0, -5]) {
-            translate([0, -12, 0]) rotate([0, 90, 0]) drill(h=5, d=3);
-            translate([0, 12, 0]) rotate([0, 90, 0]) drill(h=5, d=3);
+            translate([0, -12, 0]) rotate([0, 90, 0]) drill(h=5, d=threaded_screw_d);
+            translate([0, 12, 0]) rotate([0, 90, 0]) drill(h=5, d=threaded_screw_d);
         }
         
         // Rear mounting bracket drills - 24mm, m3
         rotate([0, 0, 180]) translate([20-wall, 0, -5]) {
-            translate([0, -12, 0]) rotate([0, 90, 0]) drill(h=5, d=3);
-            translate([0, 12, 0]) rotate([0, 90, 0]) drill(h=5, d=3);
+            translate([0, -12, 0]) rotate([0, 90, 0]) drill(h=5, d=threaded_screw_d);
+            translate([0, 12, 0]) rotate([0, 90, 0]) drill(h=5, d=threaded_screw_d);
         }
         
         // Front mounting bracket drills - 24mm, m3
         rotate([0, 0, -90]) translate([-20, 0, -5]) {
-            translate([0, -12, 0]) rotate([0, 90, 0]) drill(h=5, d=3);
-            translate([0, 12, 0]) rotate([0, 90, 0]) drill(h=5, d=3);
+            translate([0, -12, 0]) rotate([0, 90, 0]) drill(h=5, d=threaded_screw_d);
+            translate([0, 12, 0]) rotate([0, 90, 0]) drill(h=5, d=threaded_screw_d);
         }
         
-        % translate([0, 0, -7.25]) rotate([0, 0, 180]) rotate([-90, 0, 0]) e3d_v6_duct();
+        % translate([0, 0, -33]) rotate([0, 0, 180]) rotate([90, 0, 0]) e3d_v6_duct();
     }
 }
 
@@ -124,9 +126,25 @@ module scrappy_hotend_e3d_v6()
     }
 }
 
-module scrappy_sensor_e3d_v6()
+
+m3_square_nut = [2, 5.5, 5.5];
+m3_bolt_head_d = 5.5;
+m3_bolt_head_h = 3;
+
+module m3_spacer_bar_of(cut = false, w = 20)
 {
-    height=e3d_v6_bulk_length+e3d_v6_nozzle_height-7;
+    if (!cut)
+    {
+        translate([-(wall + m3_square_nut[1]), 0, -(wall + m3_square_nut[0] + wall + wall/2)])
+        cube([w, wall + m3_square_nut, wall + m3_square_nut[0] + wall + wall + wall + m3_bolt_head_h + wall]);
+    }
+}
+
+! difference() { m3_spacer_bar_of(cut = false); m3_spacer_bar_of(cut=true);
+
+module scrappy_sensor_e3d_v6(volcano=false)
+{
+    height=e3d_v6_bulk_length+e3d_v6_nozzle_height(volcano)-7;
     translate([20+wall, 0, -height]) {
         difference()
         {
@@ -136,7 +154,7 @@ module scrappy_sensor_e3d_v6()
                 translate([0, -12, 0]) rotate([0, 90, 0]) drill(h=wall, d=3-drill_tolerance*2);
                 translate([0, 12, 0]) rotate([0, 90, 0]) drill(h=wall, d=3-drill_tolerance*2);
             }
-            translate([-wall, 0, 0])
+            * translate([-wall, 0, 0])
                 scale([wall, 40-wall/2, height*1.75]) sphere(r=0.5, $fn=fn*2);
         }
 
@@ -165,13 +183,13 @@ module fan_40mm_of(cut=false)
     }
 }
 
-module fan_e3d_v6_of(cut=false)
+module fan_e3d_v6_of(cut=false, volcano = false)
 {
     angle = 55;
     fan_height = 2;
     fan_gap = 1.5;
     
-    height=e3d_v6_bulk_length+e3d_v6_nozzle_height-7;
+    height=e3d_v6_bulk_length+e3d_v6_nozzle_height(volcano=volcano)-7;
     translate([-20, 0, -height]) 
     {
         if (!cut)
@@ -231,8 +249,8 @@ module scrappy_fan_e3d_v6()
     }
 }
 
-scrappy_hotend_e3d_v6();
-rotate([0, 0, -90]) scrappy_sensor_e3d_v6();
-rotate([0, 0, -90]) scrappy_fan_e3d_v6();
-if (hardware) %e3d_v6_lite();
+scrappy_hotend_e3d_v6(volcano=true);
+rotate([0, 0, -90]) scrappy_sensor_e3d_v6(volcano=true);
+rotate([0, 0, -90]) scrappy_fan_e3d_v6(volcano=true);
+if (hardware) %e3d_v6_lite(volcano=true);
 // vim: set shiftwidth=4 expandtab: //
