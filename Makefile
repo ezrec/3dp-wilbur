@@ -3,43 +3,32 @@ MKDIR ?= mkdir -p
 OPENSCAD ?= openscad
 
 SCAD := \
-	scrappy.scad \
-	scrappy_z_bracket.scad \
-	scrappy_z_clip.scad \
-	scrappy_power_box.scad \
-	scrappy_hotend_e3d.scad \
-	scrappy_hotend_geeetech.scad
+	wilbur.scad \
+	wilbur_power_box.scad \
+	wilbur_hotend_e3d.scad \
 
 MODELS := \
-    scrappy_bearing_cap.stl \
-    scrappy_bearing_sleeve.stl \
-    scrappy_y_motor_min.stl \
-    scrappy_y_motor_max.stl \
-    scrappy_z_motor.stl \
-    scrappy_z_edge.stl \
-    scrappy_z_center.stl \
-    scrappy_z_foot.stl \
-    scrappy_z_cap.stl \
-    scrappy_x_cap.stl \
-    scrappy_sled.stl \
-    scrappy_block.stl \
-    scrappy_y_rail_min.stl \
-    scrappy_y_rail_max.stl \
-    scrappy_z_bracket_left.stl \
-    scrappy_z_bracket_right.stl \
-    scrappy_z_clip.stl \
-    scrappy_z_standoff.stl \
-    scrappy_z_endstop_holder.stl \
-    scrappy_power_box.stl \
-    scrappy_control_box.stl \
-    scrappy_control_box_base.stl \
-    scrappy_control_box_lid.stl \
-    scrappy_hotend_geeetech_peek.stl \
-    scrappy_sensor_geeetech_peek.stl \
-    scrappy_hotend_e3d_v6.stl \
-    scrappy_sensor_e3d_v6.stl \
-    scrappy_fan_e3d_v6.stl \
-    scrappy_stiffener_clip.stl
+    wilbur_bearing_cap.stl \
+    wilbur_bearing_sleeve.stl \
+    wilbur_y_motor_min.stl \
+    wilbur_y_motor_max.stl \
+    wilbur_z_motor.stl \
+    wilbur_z_edge.stl \
+    wilbur_z_center.stl \
+    wilbur_z_foot.stl \
+    wilbur_z_cap.stl \
+    wilbur_x_cap.stl \
+    wilbur_sled.stl \
+    wilbur_block.stl \
+    wilbur_y_rail_min.stl \
+    wilbur_y_rail_max.stl \
+    wilbur_power_box.stl \
+    wilbur_control_box.stl \
+    wilbur_control_box_base.stl \
+    wilbur_control_box_lid.stl \
+    wilbur_hotend_e3d_v6.stl \
+    wilbur_sensor_e3d_v6.stl \
+    wilbur_fan_e3d_v6.stl
 
 
 all: $(MODELS:%=stl/%)
@@ -56,4 +45,4 @@ stl-%.scad:
 
 stl/%.stl: stl-%.scad
 	@$(MKDIR) stl
-	openscad -o $@ -D hardware=false $^
+	$(OPENSCAD) -o $@ -D hardware=false $^
