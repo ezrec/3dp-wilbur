@@ -1,0 +1,14 @@
+.git-credentials
+.gitconfig
+.moonraker_database/
+.ssh/
+.wget-hsts
+klipper/
+*.bkp
+klipper_config/mainsail.cfg
+klipper_config/moonraker.conf
+klipper_config/timelapse.cfg
+klipper_logs/
+mainsail/
+moonraker-timelapse/
+moonraker/
