@@ -717,27 +717,34 @@ module wilbur_y_rail_min()
 
 module x_cap_of(cut=false)
 {
-    x_size = rod_pocket+nut_wall+m4_nut_height+rod_wall*2;
+    x_extra = rod_pocket/2;
+    x_size = x_extra + rod_pocket+nut_wall+m4_nut_height+rod_wall*2;
 
     if (!cut) hull() {
-        translate([0, -x_rod_gap/2, 0]) rotate([0, 0, -90])
-            rod_pocket_of(d=rod_y[1], h=rod_pocket+nut_wall+m4_nut_height+rod_wall*2, adjustable=true, cut=cut);
+        translate([-x_extra, -x_rod_gap/2, 0]) rotate([0, 0, -90])
+            rod_pocket_of(d=rod_y[1], h=x_size, adjustable=true, cut=cut);
 
-        translate([0, x_rod_gap/2, 0]) rotate([0, 0, -90])
-            rod_pocket_of(d=rod_y[1], h=rod_pocket+nut_wall+m4_nut_height+rod_wall*2, adjustable=true, cut=cut);
+        translate([-x_extra, x_rod_gap/2, 0]) rotate([0, 0, -90])
+            rod_pocket_of(d=rod_y[1], h=x_size, adjustable=true, cut=cut);
     } else {
-        translate([0, -x_rod_gap/2, 0]) rotate([0, 0, -90])
-            rod_pocket_of(d=rod_y[1], h=rod_pocket+nut_wall+m4_nut_height+rod_wall*2, adjustable=true, cut=cut);
+        translate([-x_extra, -x_rod_gap/2, 0]) rotate([0, 0, -90]) {
+            rod_pocket_of(d=rod_y[1], h=x_size, adjustable=true, cut=cut);
+            translate([0, x_size - x_extra, 0]) rotate([90, 0, 0]) drill(h = x_size, d = 3);
+        }
 
-        translate([0, x_rod_gap/2, 0]) rotate([0, 0, -90])
-            rod_pocket_of(d=rod_y[1], h=rod_pocket+nut_wall+m4_nut_height+rod_wall*2, adjustable=true, cut=cut);
+        translate([-x_extra, x_rod_gap/2, 0]) rotate([0, 0, -90])
+        {
+            rod_pocket_of(d=rod_y[1], h=x_size, adjustable=true, cut=cut);
+            translate([0, x_size - x_extra, 0]) rotate([90, 0, 0]) drill(h = x_size, d = 3);
+        }
     }
 
-    translate([-rod_pocket/2, -x_rod_gap/2+bearing_diameter/2, -z_block_size/2])
-        bearing_holder_of(h=z_block_size, cut=cut);
+    bearing_tilt = 2;
+    translate([0, -x_rod_gap/2+bearing_diameter/2, -z_block_size/2])
+        rotate([0, bearing_tilt, 0]) bearing_holder_of(h=z_block_size, cut=cut);
 
-    translate([-rod_pocket/2, x_rod_gap/2-bearing_diameter/2, -z_block_size/2])
-        bearing_holder_of(h=z_block_size, cut=cut);
+    translate([0, x_rod_gap/2-bearing_diameter/2, -z_block_size/2])
+        rotate([0, bearing_tilt, 0]) bearing_holder_of(h=z_block_size, cut=cut);
 
     // Remove some bulk
     if (cut) {
@@ -754,7 +761,6 @@ module wilbur_x_cap()
         x_cap_of(cut=true);
     }
 }
-
 
 flanged_bearing_d = 13 * mm;
 flanged_bearing_fd = 15 * mm;
