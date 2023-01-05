@@ -1,0 +1,3 @@
+[submodule "HermitCrab"]
+	path = HermitCrab
+	url = https://github.com/bigtreetech/HermitCrab

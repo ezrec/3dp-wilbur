@@ -1,0 +1,1405 @@
+# Wilbur
+import math
+import cadquery as cq
+from build123d import *
+
+MATERIAL_COLOR = {
+    "metal": "steelblue",
+    "mdf": "wheat",
+    "plastic": "green",
+}
+
+
+def show_all(obj: Compound, materials=None):
+    if obj is None:
+        return
+    color = "gray"
+    if hasattr(obj, "material"):
+        if materials is None or obj.material in materials:
+            color = MATERIAL_COLOR.get(obj.material, "yellow")
+        else:
+            color = None
+    if color is not None:
+        show_object(obj.wrapped, options={"color": color})
+    if hasattr(obj, "joints"):
+        for joint in obj.joints.values():
+            show_object(joint.symbol.wrapped)
+            if joint.connected_to is not None:
+                show_all(joint.connected_to.parent, materials=materials)
+
+
+def stl_all(obj: Compound, materials=None):
+    if obj is None:
+        return
+    color = "gray"
+    if hasattr(obj, "material"):
+        if materials is None or obj.material in materials:
+            color = MATERIAL_COLOR.get(obj.material, "yellow")
+        else:
+            color = None
+    if color is not None:
+        obj.export_stl(f"stl/wilbur_{obj.label}.stl")
+    if hasattr(obj, "joints"):
+        for joint in obj.joints.values():
+            if joint.connected_to is not None:
+                stl_all(joint.connected_to.parent, materials=materials)
+
+
+mm = 1
+inch = 25.4
+
+# MDF sheet
+mdf_width = 405 * mm
+mdf_height = 500 * mm
+mdf_thickness = 16.5 * mm
+
+# Rods
+rod_diameter = 8 * mm
+rod_length = 400 * mm
+
+# Metal parts
+
+BEARING_GAP = 2 * mm
+
+
+class KnurlM(object):
+    M3_INSET_DIAMETER = 3.7 * mm
+    M3_INSET_HEIGHT = 4.5 * mm
+    M3_OUTSET_DIAMETER = 5.5 * mm
+
+    M4_INSET_DIAMETER = 5.3 * mm
+    M4_INSET_HEIGHT = 8.5 * mm
+    M4_OUTSET_DIAMETER = 6.4 * mm
+
+    M5_INSET_DIAMETER = 6.1 * mm
+    M5_INSET_HEIGHT = 9.5 * mm
+    M5_OUTSET_DIAMETER = 6.5 * mm
+
+    M = {
+        30: (M3_INSET_DIAMETER, M4_INSET_HEIGHT, M3_OUTSET_DIAMETER),
+        40: (M4_INSET_DIAMETER, M4_INSET_HEIGHT, M4_OUTSET_DIAMETER),
+        50: (M5_INSET_DIAMETER, M5_INSET_HEIGHT, M5_OUTSET_DIAMETER),
+    }
+
+    def __init__(self, size: int):
+        self.inset = (0, 0)
+        self.outset = (0, 0)
+        if int(size * 10) in self.M:
+            m = self.M[int(size * 10)]
+            self.inset = (m[0] / 2, math.ceil(m[1]))
+            self.outset = (m[2] / 2, math.ceil(m[1]))
+        else:
+            raise ValueError(f"Unknown diameter {size}")
+
+
+class BoltM(Compound):
+    def __init__(self, size: float, length=0, mode=Mode.PRIVATE):
+        self.shaft = (size / 2, length)
+        self.head = (size * 2 / 2, size * 1.1)
+        self.knurl = KnurlM(size)
+        with BuildPart(mode=mode) as part:
+            Cylinder(*self.head)
+            with Locations((0, 0, -length)):
+                Cylinder(*self.shaft)
+        super().__init__(part.part.wrapped, label=f"bolt_m{size}x{length}")
+        self.material = "metal"
+        CylindricalJoint(label="head", to_part=self)
+
+
+class Nema(Compound):
+    def __init__(self, label=None, width=0, height=0,
+                 shaft_diameter=0, shaft_height=0,
+                 mount_radius=0, mount_bolt=BoltM(3)):
+        with BuildPart() as part:
+            Box(width, height, width)
+            box_top = part.faces().sort_by(Axis.Y)[-1]
+            with Workplanes(box_top):
+                Cylinder(shaft_diameter / 2, shaft_height, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            plane = Plane(box_top).rotated((0, 0, 45))
+            with BuildSketch(plane):
+                with PolarLocations(mount_radius, 4):
+                    Circle(mount_bolt.shaft[0])
+            Extrude(amount=height, mode=Mode.SUBTRACT)
+        super().__init__(part.part.wrapped, label=label)
+        self.material = "metal"
+        self.width = width
+        self.mount_bolt = mount_bolt
+        self.mount_radius = mount_radius
+        self.mount_wall = 3 * mm
+        self.shaft = (shaft_diameter / 2, shaft_height)
+        RigidJoint(label="axis", to_part=self,
+                   joint_location=Location((0, height / 2, 0)))
+
+
+class Nema17(Nema):
+    def __init__(self):
+        super().__init__(label="nema17",
+                         width=44 * mm,
+                         height=44 * mm,
+                         shaft_diameter=5 * mm,
+                         shaft_height=22 * mm,
+                         mount_radius=22 * mm,
+                         mount_bolt=BoltM(3))
+
+
+class Rod(Compound):
+    def __init__(self, rod_diameter, rod_length):
+        self.shaft = (rod_diameter / 2, rod_length)
+        with BuildPart() as rod:
+            Cylinder(*self.shaft)
+        super().__init__(rod.part.wrapped, label=f"rod_m{rod_diameter*2}x{rod_length}")
+        self.material = "metal"
+        RigidJoint(label="top",
+                   to_part=self,
+                   joint_location=Location((0, 0, rod_length / 2)))
+        RigidJoint(label="bottom",
+                   to_part=self,
+                   joint_location=Location((0, 0, -rod_length / 2)))
+        CylindricalJoint(label="slide",
+                         to_part=self,
+                         axis=Axis((0, 0, 0), (0, 0, 1)),
+                         angle_reference=(-1, 0, 0),
+                         linear_range=(-rod_length / 2, rod_length / 2))
+
+
+BEARING_SC8UU = Compound.import_step("SC8UU_6061.step").fuse()
+
+
+class BearingSC8UU(Compound):
+    def __init__(self):
+        super().__init__(BEARING_SC8UU.copy().wrapped, label=f"SC8UU")
+        self.material = "metal"
+        self.mount = 11 * mm
+        self.size = (34, 30)
+        self.mount_bolt = BoltM(4)
+        self.mount_pattern = (18, 24)
+        RigidJoint(label="slide",
+                         to_part=self,
+                         joint_location=Location((0, 0, 0), (0, 0, 0))
+                   )
+        RigidJoint(label="mount",
+                   to_part=self,
+                   joint_location=Location((0, self.mount, 0), (0, 90, 0))
+                   )
+
+
+class GT2Belt(object):
+    def __init__(self):
+        self.height = 6.5 * MM
+        self.thickness = 1.38 * MM
+        self.clearance = 2 * MM
+        self.pulley_thickness = self.thickness - 0.75
+        self.pitch = 2 * MM
+
+        self.profile = [
+            (-1, -0.63),
+            (-1, 0),
+
+            (-0.648009, 0.037218),
+            (-0.598311, 0.130528),
+            (-0.578605, 0.238423),
+            (-0.547291, 0.343077),
+            (-0.504797, 0.443762),
+            (-0.451556, 0.53975),
+            (-0.358229, 0.636924),
+            (-0.2484, 0.707276),
+            (-0.127259, 0.750044),
+            (0, 0.76447),
+            (0.127259, 0.750044),
+            (0.2484, 0.707276),
+            (0.358229, 0.636924),
+            (0.451556, 0.53975),
+            (0.504649, 0.443762),
+            (0.547158, 0.343077),
+            (0.578556, 0.238423),
+            (0.598311, 0.130528),
+            (0.647876, 0.037218),
+            (1, 0),
+            (1, -0.63),
+
+        ]
+
+    def belt(self, teeth: int, tolerance=0 * MM):
+        profile = list(self.profile)
+        profile[0] = (profile[0][0], profile[0][1] - tolerance)
+        profile[len(profile) - 1] = (profile[len(profile) - 1][0], profile[len(profile) - 1][1] - tolerance)
+        for n in range(teeth):
+            x = (-self.pitch * teeth / 2 + self.pitch * (n + 0.5))
+            with Locations((x, 0)):
+                Polygon(*profile)
+
+    def pulley(self, teeth: int = 0, radius: float = 0):
+        assert((teeth > 0 and not radius > 0) or
+               (not teeth > 0 and radius > 0))
+
+        # Shrink radius to fit.
+        if radius > 0:
+            teeth = int(math.pi / math.asin(self.pitch / 2 / radius))
+
+        radius = self.pitch / 2 / math.sin(math.radians(180 / teeth))
+        Circle(radius)
+        with PolarLocations(radius, teeth):
+            with Locations(Rotation(about_z=90)):
+                Polygon(*self.profile, mode=Mode.SUBTRACT)
+
+
+class GT2Idler(Compound):
+    def __init__(self):
+        self.bearing = (18 * mm / 2, 8.5)
+        disk_width = 1 * mm
+        self.shaft = (12 * mm / 2, self.bearing[1] - disk_width * 2)
+        mount_diameter = 5 * mm
+        self.rim = (self.bearing[0], disk_width)
+        self.bolt = BoltM(5)
+        with BuildPart(Plane.XY) as part:
+            Cylinder(self.bearing[0], disk_width, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Locations((0, 0, disk_width)):
+                Cylinder(*self.shaft, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Locations((0, 0, disk_width + self.shaft[1])):
+                Cylinder(self.bearing[0], disk_width, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Workplanes(part.faces().sort_by(Axis.Z)[-1]):
+                Hole(mount_diameter / 2)
+        super().__init__(part.part.wrapped, label=f"bearing_gt2_idler")
+        self.material = "metal"
+        RigidJoint(label="mount", to_part=self,
+                   joint_location=Location((0, 0, 0), (90, 0, 0)))
+
+
+class GT2Pulley(Compound):
+    def __init__(self, **kwargs):
+        self.size = (13 * mm / 2, 14 * mm)
+        disk_width = 1 * mm
+        self.shaft = (11 * mm / 2, 6 * mm)
+        mount_diameter = 5 * mm
+        self.bolt = BoltM(5)
+        with BuildPart() as part:
+            Cylinder(self.size[0], disk_width, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Locations((0, 0, disk_width)):
+                Cylinder(*self.shaft, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Locations((0, 0, disk_width + self.shaft[1])):
+                Cylinder(self.size[0], self.size[1] - (disk_width + self.shaft[1]),
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+            Hole(mount_diameter / 2)
+        super().__init__(part.part.wrapped, label=f"idler_gt2")
+        self.material = "metal"
+        RigidJoint(label="mount", to_part=self)
+
+
+RAIL_PROFILE_NOMINAL = [(4.76, -8.44),
+                        (4.76, -6.88),
+                        (4.88, -6.6),
+                        (5.1, -6.38),
+                        (5.21, -6.15),
+                        (6.74, -4.74),
+                        (7.5, -3.98),
+                        (7.5, -2.45),
+                        (6.73, -1.68),
+                        (5.21, -0.28),
+                        (5.1, -0.05),
+                        (5.04, 0.0),
+                        (-5.04, 0.0),
+                        (-5.1, -0.05),
+                        (-5.21, -0.28),
+                        (-6.73, -1.68),
+                        (-7.5, -2.45),
+                        (-7.5, -3.98),
+                        (-6.74, -4.74),
+                        (-5.21, -6.15),
+                        (-5.1, -6.38),
+                        (-4.88, -6.6),
+                        (-4.76, -6.88),
+                        (-4.76, -8.44),
+                        (-4.88, -8.72),
+                        (-7.2, -11.04),
+                        (-7.5, -11.75),
+                        (-7.49, -14.29),
+                        (-6.79, -15.0),
+                        (6.8, -15.0),
+                        (7.5, -14.3),
+                        (7.5, -11.75),
+                        (7.2, -11.04),
+                        (4.88, -8.72)]
+RAIL_PROFILE = [(v[0], v[1] + 7.5) for v in RAIL_PROFILE_NOMINAL]
+
+
+class LinearRail(Compound):
+    def __init__(self, h=15 * mm, length=500 * mm,
+                 bolt_spacing=60 * mm,
+                 bolt=BoltM(4)):
+        self.bolt = bolt
+        bolt_holes = (length // bolt_spacing) + 1
+        bolt_offset = (length - (bolt_holes - 1) * bolt_spacing) / 2
+        with BuildPart() as part:
+            with BuildSketch() as part_sk:
+                with Locations((0, -7.5)):
+                    Polygon(*RAIL_PROFILE, align=None)
+            Extrude(amount=length)
+            with Workplanes(part.faces().sort_by(Axis.Y)[-1]):
+                with GridLocations(0, bolt_spacing, 1, bolt_holes):
+                    CounterBoreHole(radius=bolt.shaft[0],
+                                    counter_bore_radius=bolt.head[0],
+                                    counter_bore_depth=bolt.head[1],
+                                    mode=Mode.SUBTRACT)
+        super().__init__(part.part.wrapped, label=f"hgr15")
+        self.material = "metal"
+        self.bolt_spacing = bolt_spacing
+        self.size = (h, h)
+        RigidJoint(label="left", to_part=self,
+                   joint_location=Location((0, -h, bolt_offset)))
+        RigidJoint(label="right", to_part=self,
+                   joint_location=Location((0, -h, length - bolt_offset), (0, 0, 0)))
+        LinearJoint(label="slide", to_part=self,
+                    axis=Axis((0, 0, length / 2), (0, 0, 1)),
+                    linear_range=(-length / 2, length / 2))
+
+
+class LinearPillow(Compound):
+    def __init__(self, width=34 * mm, length=60 * mm, height=24 * mm, offset=14 * mm,
+                 bolt_pattern=(26 * mm, 26 * mm),
+                 bolt=BoltM(4)):
+        self.size = (width, length)
+        self.bolt = bolt
+        self.mount_pattern = bolt_pattern
+        self.mount = (width, 39.6 * mm)
+        top_face_inset = 4.6 * mm
+        top_face_length = self.mount[1]
+        with BuildPart() as part:
+            with Locations((0, -height + offset, 0)):
+                Box(width, height - top_face_inset, length, align=(Align.CENTER, Align.MIN, Align.CENTER))
+            with Workplanes(part.faces().sort_by(Axis.Y)[-1]):
+                Box(top_face_length, width, top_face_inset, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            left_face = part.faces().sort_by(Axis.Z)[-1]
+            top_face = part.faces().sort_by(Axis.Y)[-1]
+            with Workplanes(left_face):
+                with Locations((0, height / 2 - 7.5 - offset)):
+                    with BuildSketch() as sketch:
+                        Polygon(*RAIL_PROFILE)
+                    Extrude(amount=-length, mode=Mode.SUBTRACT)
+            with Workplanes(top_face):
+                with GridLocations(*bolt_pattern, 2, 2):
+                    Hole(bolt.shaft[0])
+        super().__init__(part.part.wrapped, label=f"hsr15r")
+        self.material = "metal"
+        RigidJoint(label="slide", to_part=self)
+        RigidJoint(label="mount", to_part=self,
+                   joint_location=Location((0, offset, 0)))
+
+
+# Stack-up from 8mm rod center
+
+
+class Stackup(object):
+    def __init__(self, y_rod_offset=10 * mm, belt_height=5 * mm,
+                 idler=GT2Idler(),
+                 belt=GT2Belt(),
+                 y_rod=Rod(rod_diameter, rod_length),
+                 y_pillow=BearingSC8UU(),
+                 mdf_side=(430 * mm, 135 * mm),
+                 mdf_front_y=70 * mm,
+                 tolerance=0.35 * MM,
+                 x_rail=LinearRail(),
+                 x_pillow=LinearPillow(),
+                 nema=Nema17(),
+                 bearing_gap=BEARING_GAP):
+        self.bearing_gap = bearing_gap
+        self.tolerance = tolerance
+
+        # Reference objects
+        self.mount_bolt = BoltM(4)
+        self.belt = belt
+        self.idler = idler
+        self.x_pillow = x_pillow
+        self.y_pillow = y_pillow
+        self.y_rod = y_rod
+        self.x_rail = x_rail
+        self.mdf_back = (mdf_width, mdf_height)
+        self.mdf_side = *mdf_side,
+        self.mdf_front = (mdf_width, mdf_front_y)
+        self.nema = nema
+        self.side_wall = self.mount_bolt.knurl.inset[0] * 2 + 2.5 * mm * 2
+        self.top_wall = self.mount_bolt.head[1] + 4 * mm
+
+        # Stackup in Z
+        self.z_rod_offset = (self.mdf_side[0] - self.y_rod.shaft[1]) / 2 + 10 * mm
+
+        # Stackup in X
+        self.frame_center = 0
+        self.frame_back_edge = self.frame_center = self.mdf_back[0] / 2
+        self.frame_side_edge = self.frame_back_edge + mdf_thickness
+        # Amount to add from rail hole to rod location
+        self.rod_to_rail = self.idler.shaft[0]
+        self.frame_rod_x = (int(self.mdf_back[0] // self.x_rail.bolt_spacing) +
+                            2) * self.x_rail.bolt_spacing / 2 + self.rod_to_rail
+
+        # Stackup in Y
+        self.y_rod_slide = 0
+        self.y_rod_mount = y_pillow.mount
+        self.y_rod_offset = y_rod_offset
+        self.mdf_top = self.y_rod_offset
+        self.nema_attach_y = self.mdf_top - 50 * mm
+        self.x_rail_mount = self.y_rod_mount + self.x_rail.bolt.knurl.inset[1]
+        self.x_rail_grip = self.x_rail_mount + 4 * mm
+        self.x_rail_clip = self.x_rail_mount + self.x_rail.size[1] / 2
+        self.x_rail_slide = self.x_rail_mount + self.x_rail.size[1]
+        # Top of the X rail pillow (see LinearPillow()'s "offset")
+        self.x_rail_pillow_mount = self.x_rail_slide + 14 * mm
+        # Tensioner on top of the hotend mount (which is 4mm thick)
+        self.x_rail_pillow_tensioner = self.x_rail_pillow_mount + 4 * mm
+        self.idler_lower = self.x_rail_slide + self.idler.bolt.knurl.inset[1]
+        self.idler_upper = self.idler_lower + self.idler.bearing[1] + self.bearing_gap
+
+# MDF Parts
+
+
+class FrameRodPocket(Compound):
+    def __init__(self, s=Stackup(), form="back"):
+        pocket = (s.frame_rod_x, s.y_rod_offset)
+
+        if form == "back":
+            x, y, z = (s.mdf_back[0], s.mdf_back[1], mdf_thickness)
+        elif form == "front":
+            x, y, z = (s.mdf_front[0], s.mdf_front[1], mdf_thickness)
+
+        with BuildPart() as part:
+            with BuildSketch() as sk:
+                with Locations((0, -y)):
+                    Rectangle(x, y, align=(Align.CENTER, Align.MIN))
+                with Locations((-pocket[0], 0), (pocket[0], 0)) as l:
+                    Circle(rod_diameter / 2, mode=Mode.SUBTRACT)
+            Extrude(amount=z, mode=Mode.ADD)
+        super().__init__(part.part.wrapped, label=f"mdf_{form}")
+        self.material = "mdf"
+        RigidJoint(label="left",
+                   to_part=self,
+                   joint_location=Location((-x / 2, 0, 0), (0, 0, 0))
+                   )
+        RigidJoint(label="right",
+                   to_part=self,
+                   joint_location=Location((x / 2, 0, 0), (0, 0, 0))
+                   )
+        if form == "back":
+            RigidJoint(label="left_pocket",
+                       to_part=self,
+                       joint_location=Location((-pocket[0], -pocket[1], s.z_rod_offset), (0, 0, 0)))
+            RigidJoint(label="right_pocket",
+                       to_part=self,
+                       joint_location=Location((pocket[0], -pocket[1], s.z_rod_offset), (0, 0, 0)))
+
+
+class FrameBack(FrameRodPocket):
+    def __init__(self, s=Stackup()):
+        super().__init__(s=s, form="back")
+
+
+class FrameFront(FrameRodPocket):
+    def __init__(self, s=Stackup()):
+        super().__init__(s=s, form="front")
+
+
+class FrameSide(Compound):
+    def __init__(self, s=Stackup()):
+        x = s.mdf_side[0]
+        y = s.mdf_side[1]
+        y_far = s.mdf_front[1]
+        z = mdf_thickness
+        with BuildPart(Plane.YZ) as part:
+            with BuildSketch() as part_sk:
+                Polygon((0, 0), (0, x), (-y_far, x), (-y, 0), align=None)
+            Extrude(amount=z, mode=Mode.ADD)
+        super().__init__(part.part.wrapped, label=f"mdf_side")
+        self.material = "mdf"
+        RigidJoint(label="left_back",
+                   to_part=self,
+                   joint_location=Location((0, 0, 0))
+                   )
+        RigidJoint(label="right_back",
+                   to_part=self,
+                   joint_location=Location((z, 0, 0))
+                   )
+        RigidJoint(label="left_front",
+                   to_part=self,
+                   joint_location=Location((0, 0, x - z))
+                   )
+        RigidJoint(label="right_front",
+                   to_part=self,
+                   joint_location=Location((z, 0, x - z))
+                   )
+
+
+class RodPocket(BasePartObject):
+    def __init__(self, s=Stackup(), rear=0, **kwargs):
+        r = s.y_rod.shaft[0]
+        sink = r * 2
+        wall = 6 * mm
+        self.size = (r + wall, sink * 2)
+        self.radius = r
+
+        with BuildPart() as part:
+            Cylinder(self.size[0], self.size[1])
+            with BuildSketch(part.faces().sort_by(Axis.Z)[0]):
+                Circle(self.radius)
+                for n in range(4):
+                    RegularPolygon(self.radius * 1.21, 4, rotation=30 * n)
+            Box(self.size[0], self.size[0] * 2, self.size[1], align=(Align.MIN, Align.CENTER, Align.CENTER))
+            Extrude(amount=-sink * 1.25, mode=Mode.SUBTRACT)
+            if rear > 0:
+                with Locations((0, 0, rear / 2)):
+                    Cylinder(self.size[0], rear)
+                    Box(self.size[0], self.size[0] * 2, rear, align=(Align.MIN, Align.CENTER, Align.CENTER))
+
+        super().__init__(part.solids()[0], **kwargs)
+
+# Plastic parts
+
+
+class BearingShim(Compound):
+    def __init__(self, s=Stackup(), height=None):
+        if height is None:
+            height = s.bearing_gap
+
+        with BuildPart() as part:
+            with BuildSketch():
+                Circle(7 * mm / 2)
+                Circle(7 * mm / 2 - 0.8 * mm, mode=Mode.SUBTRACT)
+            Extrude(amount=height)
+
+        super().__init__(part.part.wrapped, label=f"bearing_shim_{height}mm")
+        self.material = "plastic"
+
+
+class Nema17Mount(Compound):
+    def __init__(self, s=Stackup(), is_left=False, idler_offset=None,
+                 wall=3 * mm):
+        if idler_offset == None:
+            idler_offset = s.idler_lower
+        idler_height = idler_offset - s.mdf_top
+
+        bolt = s.nema.mount_bolt
+        fillet = 2 * mm
+
+        rod_position = (-(s.frame_rod_x - s.mdf_back[0] / 2 - mdf_thickness), -s.y_rod_offset, s.z_rod_offset)
+
+        with BuildPart():
+            rp = RodPocket(rear=25, mode=Mode.PRIVATE)
+
+        # Nema mount
+        side_wall = 5 * mm
+        mount_w = s.nema.width + 1 + side_wall * 2
+        mount_depth = s.mdf_top - s.nema_attach_y + 8 * mm
+        mount_h = idler_height + mount_depth - s.bearing_gap
+        axis_position = (rod_position[0], idler_height - s.bearing_gap, -mount_w / 2)
+
+        with BuildPart() as part:
+            # Rod attachment
+            with Locations((-1, rod_position[1] - rp.size[0], 0)):
+                Box(1, -(rod_position[1] - rp.size[0]) + s.top_wall, mdf_thickness * 2,
+                    align=(Align.MIN, Align.MIN, Align.MIN))
+            side_face = part.faces().sort_by(Axis.X)[0]
+            with Locations(Location(rod_position, (0, 1, 0), (180))):
+                with Locations(Rotation(0, 0, 180)):
+                    Add(rp)
+            Loft(side_face, part.faces(Select.LAST).sort_by(Axis.X)[-1])
+
+            # Outer plate
+            with Workplanes(Plane.ZY):
+                with Locations((mdf_thickness * 2 / 2, -mount_depth / 2, side_wall / 2)):
+                    Box(mdf_thickness * 2, mount_depth, side_wall)
+
+            # Top plate
+            with Locations(axis_position):
+                with Locations((0, - s.nema.mount_wall / 2, 0)):
+                    Box(mount_w, s.nema.mount_wall, mount_w)
+            top_face = part.faces(Select.LAST).sort_by(Axis.Y)[-1]
+            bottom_face = part.faces(Select.LAST).sort_by(Axis.Y)[0]
+
+            # Sides
+            for x in (-1, 1):
+                with Workplanes(bottom_face):
+                    with Locations((0, x * (-mount_w / 2 + side_wall / 2))):
+                        with BuildSketch():
+                            Rectangle(mount_w, side_wall)
+                            with Locations((mount_w / 2 - side_wall / 2, 0,
+                                            mount_h - s.nema.mount_wall)):
+                                Rectangle(side_wall, side_wall)
+                    Loft()
+
+            inner_side_face = part.faces(Select.LAST).sort_by(Axis.X)[-1]
+
+            # Front
+            with Locations(axis_position):
+                with Locations((-mount_w / 2,
+                                -mount_h / 2,
+                                mount_w / 2 - side_wall / 2)):
+                    Box(mount_w, mount_h, side_wall,
+                        align=(Align.MIN, Align.CENTER, Align.CENTER))
+            with Locations((-side_wall, axis_position[1] - mount_h / 2,
+                            axis_position[2] + mount_w / 2 - side_wall / 2)):
+                Box(mdf_thickness * 2 + side_wall, mount_h, side_wall,
+                    align=(Align.MIN, Align.CENTER, Align.CENTER))
+
+            with Workplanes(Plane.YX):
+                with Locations((s.nema_attach_y - s.mdf_top, mdf_thickness * 1.5, side_wall)):
+                    CounterBoreHole(radius=s.mount_bolt.shaft[0],
+                                    counter_bore_radius=s.mount_bolt.head[0],
+                                    counter_bore_depth=s.mount_bolt.head[1])
+
+            # Drills
+            with Workplanes(top_face):
+                Hole(s.idler.bearing[1])
+                with PolarLocations(s.nema.mount_radius, 4, start_angle=45, stop_angle=360 + 45):
+                    Hole(3.2 * mm / 2)
+
+            # Top attachment plate
+            bx = Box(mdf_thickness * 2, s.top_wall, mdf_thickness * 2, align=(Align.MIN, Align.MIN, Align.MIN))
+            with Workplanes(bx.faces().sort_by(Axis.Y)[-1]):
+                with Locations((mdf_thickness / 2, mdf_thickness / 2)):
+                    CounterBoreHole(radius=s.mount_bolt.shaft[0],
+                                    counter_bore_radius=s.mount_bolt.head[0],
+                                    counter_bore_depth=s.mount_bolt.head[1],
+                                    mode=Mode.SUBTRACT)
+
+            # Angle bracket
+            with Workplanes(Plane.XZ):
+                with Locations((0, 0, -axis_position[1])):
+                    with BuildSketch():
+                        Polygon((axis_position[0] + mount_w / 2, -side_wall),
+                                (mdf_thickness * 2, -side_wall),
+                                (axis_position[0] + mount_w / 2, -mount_w),
+                                align=None)
+                    Extrude(amount=s.nema.mount_wall)
+
+        idler_delta = 0
+        label = "left"
+        if not is_left:
+            label = "right"
+            part.part = part.part.mirror(Plane.YZ)
+            rod_position = (rod_position[0] * -1, rod_position[1], rod_position[2])
+            axis_position = (axis_position[0] * -1, axis_position[1], axis_position[2])
+            idler_delta = s.idler_upper - s.idler_lower
+
+        idler_position = (axis_position[0], axis_position[1] + s.bearing_gap + idler_delta, axis_position[2])
+        nema_position = (axis_position[0], axis_position[1] - s.nema.mount_wall, axis_position[2])
+
+        super().__init__(part.part.wrapped, label=f"nema17_mount_{label}")
+        self.material = "plastic"
+        RigidJoint(label="rod", to_part=self,
+                   joint_location=Location(rod_position))
+        RigidJoint(label="mount", to_part=self)
+        RigidJoint(label="clip", to_part=self)
+        RigidJoint(label="idler", to_part=self,
+                   joint_location=Location(idler_position))
+        RigidJoint(label="nema", to_part=self,
+                   joint_location=Location(nema_position))
+
+
+class Nema17MountClip(Compound):
+    def __init__(self, s=Stackup(), is_left=True, **kwargs):
+        fillet = 2 * mm
+
+        depth = s.mdf_top - s.nema_attach_y + 8 * mm
+
+        with BuildPart() as part:
+            with Locations((mdf_thickness / 2 + mdf_thickness,
+                            -depth / 2,
+                            mdf_thickness + mdf_thickness / 2)):
+                Box(mdf_thickness, depth, mdf_thickness)
+            rear_face = part.faces().sort_by(Axis.Z)[0]
+            top_face = part.faces().sort_by(Axis.Y)[-1]
+            with Workplanes(rear_face):
+                with Locations((0, -rear_face.width / 2 + s.mdf_top - s.nema_attach_y)):
+                    Hole(*s.mount_bolt.knurl.inset)
+            with Workplanes(top_face):
+                Hole(*s.mount_bolt.knurl.inset)
+            Fillet(*part.edges().filter_by(Axis.Y), radius=fillet)
+
+        if not is_left:
+            part.part = part.part.mirror(Plane.YZ)
+
+        super().__init__(part.part.wrapped, label=f"nema17_mount_clip", **kwargs)
+        self.material = "plastic"
+        RigidJoint(label="clip", to_part=self)
+
+
+class SlideToRail(Compound):
+    def __init__(self, s=Stackup()):
+        width = s.y_pillow.size[0]
+        length = s.y_pillow.size[1]
+        bolt = s.y_pillow.mount_bolt
+        bolt_pattern = s.y_pillow.mount_pattern
+        grip = s.x_rail_grip - s.x_rail_mount
+        height = s.x_rail_mount - s.y_rod_mount
+        with BuildPart() as part:
+            Box(width, height, length, align=(Align.CENTER, Align.MIN, Align.CENTER))
+            top_face = part.faces().sort_by(Axis.Y)[-1]
+            front_face = part.faces().sort_by(Axis.X)[0]
+            with Locations((0, height, 0)):
+                Box(bolt_pattern[1] - bolt.head[0] * 2, grip, length, align=(Align.CENTER, Align.MIN, Align.CENTER))
+            Fillet(*part.edges().filter_by(Axis.Y), radius=2)
+
+            with Workplanes(front_face):
+                with BuildSketch():
+                    with Locations((0, s.x_rail.size[1] + height / 2 - 7.5)):
+                        Polygon(*RAIL_PROFILE)
+                Extrude(amount=-100, mode=Mode.SUBTRACT)
+
+            with Workplanes(top_face):
+                with GridLocations(*bolt_pattern, 2, 2):
+                    CounterBoreHole(radius=bolt.shaft[0],
+                                    counter_bore_radius=bolt.head[0],
+                                    counter_bore_depth=bolt.head[1],
+                                    mode=Mode.SUBTRACT)
+                with Locations((0, s.rod_to_rail)):
+                    Hole(s.mount_bolt.knurl.inset[0])
+        super().__init__(part.part.wrapped, label="slide_to_rail")
+        self.material = "plastic"
+        RigidJoint(label="mount", to_part=self,
+                   joint_location=Location((0, 0, 0), (0, 90, 0)))
+        RigidJoint(label="slide", to_part=self,
+                   joint_location=Location((s.rod_to_rail, height, 0), (0, 90, 0)))
+
+
+class RailCap(Compound):
+    def __init__(self, s=Stackup(),
+                 form="bulk",
+                 is_left=True,
+                 pillow=BearingSC8UU(),
+                 tolerance=0.2):
+
+        top_wall = s.mount_bolt.head[1] + 4 * mm
+        side_wall = s.side_wall
+        width, length = pillow.size[1], s.idler.bearing[0] * 4 + tolerance * 2 + side_wall * 2
+
+        idler = s.idler
+        rail_size = s.x_rail.size[0]
+        assert(s.x_rail.size[0] == s.x_rail.size[1])
+        embiggen = (rail_size + tolerance * 2) / rail_size
+        y_clip = s.x_rail_clip - s.x_rail_mount
+        h_clip = s.x_rail_slide - s.x_rail_clip
+        h_bracket = (s.idler_lower - s.x_rail_slide) - s.bearing_gap / 2
+        height = h_clip + h_bracket
+        y_top = y_clip + height
+        fillet = 5 * mm
+
+        idler_radius = s.idler.shaft[0]
+        rod_to_rail = s.rod_to_rail
+
+        reflect = -1
+        if is_left:
+            reflect = 1
+
+        idler_lower_y = s.idler_lower - s.x_rail_mount
+        idler_lower = (reflect * idler_radius, idler_lower_y, idler_radius)
+        idler_upper_y = s.idler_upper - s.x_rail_mount
+        idler_upper = (reflect * -idler_radius, idler_upper_y, -idler_radius)
+
+        idler_x2_height = s.bearing_gap * 2 + s.idler.bearing[1] * 2
+
+        # Build the part
+        if form == "bulk":
+            with BuildPart() as part:
+
+                # Bulk
+                with Locations((0, s.x_rail_clip - s.x_rail_mount, 0)):
+                    Box(width, height, length, align=(Align.CENTER, Align.MIN, Align.CENTER))
+
+                # Carve out rail profile
+                rail_face = part.faces().sort_by(Axis.Z)[-1]
+                top_face = part.faces().sort_by(Axis.Y)[-1]
+
+                # Add side columns
+                with Workplanes(top_face):
+                    with Locations((reflect * -(length - side_wall) / 2, 0)):
+                        Box(side_wall, width - side_wall, idler_x2_height,
+                            align=(Align.CENTER, Align.CENTER, Align.MIN))
+
+                    for corner in ([-1, -1], [1, -1], [1, 1], [-1, 1]):
+
+                        with Locations((corner[0] * (length - side_wall) / 2,
+                                        corner[1] * (width - side_wall) / 2)):
+                            Cylinder(side_wall / 2, idler_x2_height,
+                                     align=(Align.CENTER, Align.CENTER, Align.MIN))
+                            with Locations((0, 0, idler_x2_height)):
+                                Hole(*s.mount_bolt.knurl.inset)
+
+                Fillet(*part.edges().filter_by(Axis.Y), radius=fillet)
+
+                with Workplanes(rail_face):
+                    with BuildSketch():
+                        with Locations((0, - (height - rail_size) / 2 - 7.5)):
+                            Polygon(*RAIL_PROFILE)
+                            Scale(by=embiggen)
+                    Extrude(amount=-length, mode=Mode.SUBTRACT)
+
+                mount_diameter = (s.idler.bolt.knurl.outset[0] + 2) * 2
+                with Workplanes(top_face):
+                    # Lower idler mount
+                    for l in [idler_lower, idler_upper]:
+                        with Locations((l[2], l[0])):
+                            with BuildSketch() as sk_idler:
+                                Circle(mount_diameter / 2)
+                                with Locations((0, 0, s.bearing_gap / 2)):
+                                    Circle(s.idler.bolt.knurl.outset[0] + 1)
+                            Loft()
+                            with Locations((0, 0, s.bearing_gap / 2)):
+                                Hole(*s.idler.bolt.knurl.inset)
+
+                # Bore out mounting hole
+                with Workplanes(top_face):
+                    CounterBoreHole(radius=s.x_rail.bolt.shaft[0],
+                                    counter_bore_radius=s.x_rail.bolt.head[0],
+                                    counter_bore_depth=s.x_rail.bolt.head[1],
+                                    mode=Mode.SUBTRACT)
+        elif form == "tip":
+            with BuildPart() as part:
+                with Locations((0, s.x_rail_clip - s.x_rail_mount + height + idler_x2_height, 0)):
+                    Box(width, top_wall, length,
+                        align=(Align.CENTER, Align.MIN, Align.CENTER))
+
+                top_face = part.faces().sort_by(Axis.Y)[-1]
+                bottom_face = part.faces().sort_by(Axis.Y)[0]
+
+                Fillet(*part.edges().filter_by(Axis.Y), radius=fillet)
+
+                with Workplanes(top_face):
+                    for l in [idler_lower, idler_upper]:
+                        with Locations((l[2], l[0])):
+                            Hole(radius=s.idler.bolt.head[0])
+                    for corner in ([-1, -1], [1, -1], [1, 1], [-1, 1]):
+                        with Locations((corner[0] * (length - side_wall) / 2,
+                                        corner[1] * (width - side_wall) / 2)):
+                            CounterBoreHole(radius=s.mount_bolt.shaft[0],
+                                            counter_bore_radius=s.mount_bolt.head[0],
+                                            counter_bore_depth=s.mount_bolt.head[1])
+        form_side = "right"
+        if is_left:
+            form_side = "left"
+        super().__init__(part.part.wrapped, label=f"rail_cap_{form_side}_{form}")
+        self.material = "plastic"
+
+        RigidJoint(label="tip", to_part=self)
+
+        if form == "bulk":
+            RigidJoint(label="mount", to_part=self)
+            RigidJoint(label="idler_lower", to_part=self,
+                       joint_location=Location(idler_lower))
+            RigidJoint(label="idler_upper", to_part=self,
+                       joint_location=Location(idler_upper))
+
+
+# Origin: MDF top front corner
+
+
+class IdlerCap(Compound):
+    def __init__(self, s=Stackup(), is_left=True, form="top"):
+        idler = s.idler
+        rod_x_offset = s.frame_rod_x - s.frame_side_edge
+        idler_x_offset = rod_x_offset + 0 * idler.shaft[0]
+        idler_location = (-idler_x_offset, -idler_x_offset)
+        idler_lower = (*idler_location, s.idler_lower - s.mdf_top)
+        idler_upper = (*idler_location, s.idler_upper - s.mdf_top)
+        knurl = s.mount_bolt.knurl
+        knurl_wall = knurl.inset[1]
+        side_wall = s.side_wall
+        top_wall = s.top_wall
+
+        y_far = s.mdf_front[1]
+        fillet = 2 * mm
+
+        idler_offset_radius = math.cos(math.radians(45)) * idler_x_offset * 2
+        w = side_wall + mdf_thickness * 2
+        l = side_wall + s.y_rod_offset + s.y_rod.shaft[0] * 2
+        h = idler_lower[2] - s.bearing_gap / 2 - top_wall
+
+        rod_location = (-rod_x_offset, s.mdf_side[0] - (s.z_rod_offset + s.y_rod.shaft[1]), -s.y_rod_offset)
+
+        axis = (90, 0, 0)
+
+        if form == "top":
+            with BuildPart():
+                rp = RodPocket()
+
+            with BuildPart() as part:
+                # Inside corner mount
+                with Locations((-side_wall, -side_wall, - y_far)):
+                    Box(w, l, top_wall + y_far, align=(Align.MIN, Align.MIN, Align.MIN))
+
+                    top_face = part.faces().sort_by(Axis.Z)[-1]
+                    bottom_face = part.faces().sort_by(Axis.Z)[0]
+                    left_face = part.faces().sort_by(Axis.X)[0]
+
+                    Box(w, w, top_wall + y_far, align=(Align.MIN, Align.MIN, Align.MIN))
+
+                # Clip extension
+                with Locations((mdf_thickness, mdf_thickness, 0)):
+                    box = Box(mdf_thickness, mdf_thickness, top_wall,
+                              align=(Align.MIN, Align.MIN, Align.MIN))
+
+                # Carve out inside corner
+                with Locations((0, 0, -y_far)):
+                    Box(mdf_thickness * 2, mdf_thickness * 2, y_far,
+                        align=(Align.MIN, Align.MIN, Align.MIN), mode=Mode.SUBTRACT)
+
+                Fillet(*part.edges().filter_by(Axis.Z), radius=fillet)
+
+                with Workplanes(box.faces().sort_by(Axis.Z)[-1]):
+                    CounterBoreHole(radius=s.mount_bolt.knurl.inset[0],
+                                    counter_bore_radius=s.mount_bolt.head[0],
+                                    counter_bore_depth=s.mount_bolt.head[1])
+
+                with Workplanes(top_face) as wp:
+                    with Locations((-w / 2 + side_wall, -l / 2 + side_wall, - top_wall)):
+                        with Locations((-idler_x_offset, - idler_x_offset, idler_lower[2] - s.bearing_gap / 2)):
+                            with BuildSketch():
+                                Circle(idler.bearing[0])
+                            with Locations((0, 0, s.bearing_gap / 2)):
+                                with BuildSketch():
+                                    Circle(s.mount_bolt.knurl.outset[0] + 2 * mm)
+                        Loft()
+                        with BuildSketch():
+                            with Locations((-side_wall, -side_wall, top_wall)):
+                                Polygon((0, 0), (w, 0), (0, l), align=None)
+                        with BuildSketch():
+                            with Locations((0, 0, h + top_wall)):
+                                Circle(idler.bearing[0])
+                        Loft()
+                    with Locations((-w / 2 + side_wall, -l / 2 + side_wall, 0)):
+                        with BuildSketch() as sk_idler:
+                            with Locations(idler_location, (0, 0)):
+                                Circle(idler.bearing[0])
+                            MakeHull(*sk_idler.edges())
+                        Extrude(amount=h)
+                        with BuildSketch() as sk:
+                            with Locations((-side_wall / 2, -side_wall / 2, -y_far / 2 - top_wall + 0.1)):
+                                Rectangle(side_wall, side_wall)
+                        with BuildSketch() as sk_idler:
+                            with Locations(idler_location):
+                                Circle(idler.bearing[0])
+                            with Locations((0, 0)):
+                                r = idler.bearing[0] / math.sqrt(2)
+                                Polygon((-r, r),
+                                        (-r, -r),
+                                        (r, -r), align=None)
+                            MakeHull(*sk_idler.edges())
+                        Loft()
+
+                # Upper idler mounting
+                with Workplanes(part.faces().sort_by(Axis.Z)[-1]):
+                    Hole(s.idler.bolt.knurl.inset[0], s.idler.bolt.knurl.inset[1] * 2)
+                with Workplanes(top_face):
+                    with Locations((-w / 2 + side_wall, -l / 2 + side_wall, -top_wall + idler_lower[2] - s.bearing_gap / 2)):
+                        Cylinder(idler.bearing[0], s.bearing_gap * 2 +
+                                 idler.bearing[1] * 2, align=(Align.CENTER, Align.CENTER, Align.MIN))
+                # Upper idler clip mounting.
+                with Workplanes(part.faces().sort_by(Axis.Z)[-1]):
+                    Hole(s.mount_bolt.knurl.inset[0], s.mount_bolt.knurl.inset[1] * 2)
+
+                # Bottom mounting knurl
+                with Workplanes(bottom_face):
+                    with Locations((-w / 2 + side_wall, l / 2 - side_wall)):
+                        with Locations((w - mdf_thickness / 2 - side_wall, side_wall / 2)):
+                            Hole(knurl.inset[0], knurl.inset[1] * 2)
+                            with Locations((0, 0, -knurl.inset[1] * 2)):
+                                Sphere(knurl.inset[0])
+
+                with Locations(rod_location):
+                    Add(rp, rotation=axis)
+                    draft_face = part.faces(Select.LAST).sort_by(Axis.X)[-1]
+                    Loft(left_face, draft_face)
+
+            name = "left"
+            if not is_left:
+                name = "right"
+                part.part = part.part.mirror(Plane.YZ)
+                idler_lower = (idler_lower[0] * -1, *idler_lower[1:])
+                idler_upper = (idler_upper[0] * -1, *idler_upper[1:])
+                rod_location = (rod_location[0] * -1, *rod_location[1:])
+
+            super().__init__(part.part.wrapped, label=f"idler_{form}_{name}")
+            RigidJoint(label="clip", to_part=self)
+            RigidJoint(label="tip", to_part=self)
+            RigidJoint(label="mount", to_part=self,
+                       joint_location=Location((0, mdf_thickness, 0), axis))
+            RigidJoint(label="idler_lower", to_part=self,
+                       joint_location=Location(idler_lower, axis))
+            RigidJoint(label="idler_upper", to_part=self,
+                       joint_location=Location(idler_upper, axis))
+            RigidJoint(label="rod", to_part=self,
+                       joint_location=Location(rod_location, axis))
+        elif form == "clip":
+            with BuildPart() as part:
+                with Locations((mdf_thickness, -side_wall, -y_far - top_wall)):
+                    Box(mdf_thickness, side_wall + mdf_thickness, top_wall, align=(Align.MIN, Align.MIN, Align.MIN))
+                bottom_face = part.faces().sort_by(Axis.Z)[0]
+                with Workplanes(bottom_face):
+                    with Locations((0, (side_wall + mdf_thickness) / 2 - side_wall / 2)):
+                        CounterBoreHole(radius=s.mount_bolt.knurl.inset[0],
+                                        counter_bore_radius=s.mount_bolt.head[0],
+                                        counter_bore_depth=s.mount_bolt.head[1],
+                                        mode=Mode.SUBTRACT)
+                with BuildSketch():
+                    # Inside corner
+                    with Locations((mdf_thickness, mdf_thickness)):
+                        Rectangle(mdf_thickness, mdf_thickness, align=(Align.MIN, Align.MIN))
+                Extrude(amount=-y_far - top_wall)
+                with Workplanes(part.faces().sort_by(Axis.Z)[-1]):
+                    with Locations((0, 0, 0)):
+                        Hole(s.mount_bolt.knurl.inset[0], s.mount_bolt.knurl.inset[1] * 2)
+                Fillet(*part.edges().filter_by(Axis.Z), radius=fillet)
+
+            name = "left"
+            if not is_left:
+                name = "right"
+                part.part = part.part.mirror(Plane.YZ)
+
+            super().__init__(part.part.wrapped, label=f"idler_{form}_{name}")
+            RigidJoint(label="clip", to_part=self)
+
+        elif form == "tip":
+            with BuildPart() as part:
+                with BuildSketch() as sk_idler:
+                    with Locations(idler_location, (0, 0)):
+                        Circle(idler.bearing[0])
+                    MakeHull(*sk_idler.edges())
+                    with Locations(idler_location, (0, 0)):
+                        Circle(4 / 2, mode=Mode.SUBTRACT)
+                Extrude(amount=4 * mm)
+
+            name = "left"
+            if not is_left:
+                name = "right"
+                part.part = part.part.mirror(Plane.YZ)
+
+            super().__init__(part.part.wrapped, label=f"idler_{form}_{name}")
+            RigidJoint(label="tip", to_part=self, joint_location=Location(
+                (0, 0, -top_wall - idler_upper[2] - s.bearing_gap / 2)))
+
+        self.material = "plastic"
+
+
+class IdlerCapTop(IdlerCap):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, form="top", **kwargs)
+
+
+class IdlerCapClip(IdlerCap):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, form="clip", **kwargs)
+
+
+class IdlerCapTip(IdlerCap):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, form="tip", **kwargs)
+
+
+class LinearPillowMount(Compound):
+    def __init__(self, s=Stackup(), pillow=LinearPillow()):
+        biqu_bolt = BoltM(3)
+        height = s.x_rail_pillow_tensioner - s.x_rail_pillow_mount
+        fillet = 1.5 * mm
+        overhang = 1 * mm
+
+        with BuildPart() as part:
+            Box(pillow.mount[0] + overhang * 2, height, pillow.mount[1],
+                align=(Align.CENTER, Align.MIN, Align.CENTER))
+            top_face = part.faces().sort_by(Axis.Y)[-1]
+            left_face = part.faces().sort_by(Axis.Z)[0]
+            right_face = part.faces().sort_by(Axis.Z)[-1]
+            tool_face = part.faces().sort_by(Axis.X)[0]
+
+            # Tool face
+            with Workplanes(tool_face):
+                with Locations((0, tool_face.width / 2)):
+                    bx = Box(tool_face.length, 40, biqu_bolt.knurl.inset[1], align=(Align.CENTER, Align.MAX, Align.MIN))
+
+            Fillet(*part.edges().filter_by(Axis.Z), radius=fillet)
+
+            # Post-fillet drills
+            with Workplanes(bx.faces().sort_by(Axis.X)[0]):
+                with GridLocations(20, 20, 2, 2):
+                    Hole(biqu_bolt.knurl.inset[0])
+
+            # Mounts to pillow
+            with Workplanes(top_face):
+                with GridLocations(*pillow.mount_pattern, 2, 2):
+                    Hole(pillow.bolt.shaft[0])
+
+        super().__init__(part.part.wrapped, label=f"linear_pillow_mount")
+        RigidJoint(label="mount", to_part=self)
+        RigidJoint(label="tensioner", to_part=self,
+                   joint_location=Location((0, height, 0)))
+
+        self.material = "plastic"
+
+
+class TensionPeg(Compound):
+    def __init__(self, s=Stackup(), radius: float = 0, bolt=BoltM(5)):
+        height = s.belt.height + s.idler.rim[1] + s.bearing_gap
+        if radius == 0:
+            radius = s.idler.bearing[0]
+
+        self.barrier = s.idler.rim[1]
+        self.tolerance = s.tolerance
+        self.bolt = bolt
+        self.size = (radius, height)
+        self.belt = s.belt
+
+        with BuildPart() as part:
+            with BuildSketch():
+                self.drill()
+            Extrude(amount=self.size[1])
+
+            bot_face = part.faces().sort_by(Axis.Z)[0]
+            front_face = part.faces().sort_by(Axis.Y)[0]
+
+            belt_teeth = int(self.size[0] * 2 / self.belt.pitch) + 1
+            edge_r = 5 * MM
+
+            with Workplanes(bot_face):
+                with BuildSketch() as sk:
+                    with Locations((bot_face.length / 2 - edge_r, edge_r)):
+                        Rectangle(edge_r, edge_r, align=(Align.MIN, Align.MAX))
+                        Circle(edge_r, mode=Mode.SUBTRACT)
+                    self.belt.belt(belt_teeth, tolerance=s.tolerance)
+                Mirror(*sk.faces(), about=Plane.ZY)
+                Extrude(amount=-self.belt.height, mode=Mode.SUBTRACT)
+
+            with Workplanes(front_face):
+                Cylinder(self.bolt.shaft[0] + 0.5, self.bolt.head[1], mode=Mode.SUBTRACT)
+
+        super().__init__(part.part.wrapped, label=f"tension_peg")
+
+        self.material = "plastic"
+
+    def drill(self, clearance: float = 0):
+        RectangleRounded(self.size[0] * 2, self.size[0] + clearance, radius=1 * MM,
+                         align=(Align.CENTER, Align.MIN))
+        Circle(self.size[0])
+
+    def pocket(self, adjustment: float = 0):
+        belt_width = self.belt.thickness + self.tolerance
+
+        with BuildPart(Plane.XY.offset(self.size[1]), mode=Mode.PRIVATE) as part:
+            with BuildSketch():
+                self.drill(clearance=adjustment)
+                Offset(amount=self.tolerance)
+            Extrude(amount=-(self.size[1]))
+
+            # Belt path
+            with BuildSketch():
+                with Locations((-self.size[0] - belt_width / 2, self.size[1])):
+                    Rectangle(belt_width, 100, align=(Align.CENTER, Align.MAX))
+                Offset(amount=self.tolerance)
+            Extrude(amount=-self.belt.height)
+
+            # Tension bolt location
+            with Locations((0, -self.size[0], -self.size[1] / 2)):
+                with Locations(Rotation(about_x=90)):
+                    Cylinder(*self.bolt.knurl.inset, align=(Align.CENTER, Align.CENTER, Align.MIN))
+                    Cylinder(self.bolt.shaft[0], 100, align=(Align.CENTER, Align.CENTER, Align.MIN))
+
+            Mirror(about=Plane.XY.offset(-self.barrier / 2))
+        return Compound(part.part.wrapped).moved(Location((0, self.bolt.knurl.inset[1] + self.size[0])))
+
+
+class TensionBlock(Compound):
+    def __init__(self, bolt=BoltM(5)):
+        peg = TensionPeg(bolt=bolt)
+
+        adjustment = 5 * MM
+        bolt_border = bolt.knurl.inset[1]
+        back_border = 3 * MM
+        bottom_border = 2 * MM
+
+        length = (peg.size[0] + bolt_border) * 2
+        width = (peg.size[0] + back_border) * 2 + adjustment
+        height = peg.size[1] * 2 + bottom_border
+
+        with BuildPart() as part:
+            with Locations((0, adjustment / 2, 0)):
+                Box(width, length, height)
+            top_face = part.faces().sort_by(Axis.Z)[-1]
+            with Workplanes(top_face):
+                with Locations((0, -top_face.width / 2 + bolt_border + peg.size[0], 0),
+                               (0, -top_face.width / 2 + bolt_border + peg.size[0], -peg.size[1])):
+                    peg.pocket(adjustment=adjustment)
+
+        super().__init__(part.part.wrapped, label=f"ex_block")
+
+
+class Tensioner(Compound):
+    def __init__(self, s=Stackup(),
+                 pillow=LinearPillow(),
+                 peg=TensionPeg()):
+        idler_lower_depth = s.x_rail_pillow_tensioner - s.idler_lower
+        depth = idler_lower_depth
+        height = peg.size[1] * 2 + peg.barrier - depth
+        overhang = 5 * mm
+        edge_overhang = 1 * mm
+        wall = 2 * MM
+
+        adjustment = 10 * MM
+
+        peg_length = peg.bolt.knurl.inset[1] + peg.size[0] + peg.bolt.knurl.inset[1]
+        tensioner_offset = pillow.size[1] / 2 + peg_length + wall + edge_overhang
+
+        length = 2 * tensioner_offset
+
+        pocket = peg.pocket(adjustment=adjustment)
+
+        with BuildPart() as part:
+            with Locations((0, -depth, 0)):
+                Box(pillow.size[0] + overhang * 2, depth + height, length / 2,
+                    align=(Align.CENTER, Align.MIN, Align.MAX))
+                top_face = part.faces().sort_by(Axis.Y)[-1]
+                Box(pillow.size[0] + overhang * 2,
+                    depth,
+                    pillow.mount[1] / 2 + edge_overhang,
+                    align=(Align.CENTER, Align.MIN, Align.MAX),
+                    mode=Mode.SUBTRACT)
+
+            with Workplanes(top_face):
+                with Locations(Location((-top_face.length / 2, -peg.size[0] - peg.belt.thickness, -peg.size[1]), (0, 0, -90))):
+                    Add(pocket, mode=Mode.SUBTRACT)
+
+            Mirror(about=Plane.XY)
+            # Mounts to pillow
+            with Workplanes(Plane.ZX.offset(height)):
+                with GridLocations(*pillow.mount_pattern, 2, 2):
+                    CounterBoreHole(pillow.bolt.shaft[0],
+                                    counter_bore_radius=pillow.bolt.head[0],
+                                    counter_bore_depth=pillow.bolt.head[1])
+
+        super().__init__(part.part.wrapped, label=f"tensioner")
+        RigidJoint(label="mount", to_part=self)
+        self.material = "plastic"
+
+
+def Wilbur():
+    frame_back = FrameBack()
+    frame_front = FrameFront()
+    rod_left = Rod(rod_diameter, rod_length)
+    rod_right = Rod(rod_diameter, rod_length)
+
+    slide_left = BearingSC8UU()
+    slide_right = BearingSC8UU()
+
+    x_position = -175
+    y_position = -175
+
+    frame_back.joints["left_pocket"].connect_to(rod_left.joints["bottom"])
+    frame_back.joints["right_pocket"].connect_to(rod_right.joints["bottom"])
+
+    rod_left.joints["slide"].connect_to(slide_left.joints["slide"],
+                                        position=y_position)
+    rod_right.joints["slide"].connect_to(slide_right.joints["slide"],
+                                         position=y_position)
+
+    frame_left = FrameSide()
+    frame_back.joints["left"].connect_to(frame_left.joints["right_back"])
+    frame_right = FrameSide()
+    frame_back.joints["right"].connect_to(frame_right.joints["left_back"])
+    frame_left.joints["right_front"].connect_to(frame_front.joints["left"])
+
+    for is_left in (True, False):
+
+        mount = Nema17Mount(is_left=is_left)
+        if is_left:
+            frame_left.joints["left_back"].connect_to(mount.joints["mount"])
+        else:
+            frame_right.joints["right_back"].connect_to(mount.joints["mount"])
+        clip = Nema17MountClip(is_left=is_left)
+        mount.joints["clip"].connect_to(clip.joints["clip"])
+
+        idler = GT2Idler()
+        mount.joints["idler"].connect_to(idler.joints["mount"])
+
+        nema = Nema17()
+        mount.joints["nema"].connect_to(nema.joints["axis"])
+
+    for is_left in (True, False):
+        idler_lower = GT2Idler()
+        idler_upper = GT2Idler()
+        idler_top = IdlerCapTop(is_left=is_left)
+        idler_clip = IdlerCapClip(is_left=is_left)
+        idler_tip = IdlerCapTip(is_left=is_left)
+        if is_left:
+            frame_left.joints["left_front"].connect_to(idler_top.joints["mount"])
+        else:
+            frame_right.joints["right_front"].connect_to(idler_top.joints["mount"])
+        idler_top.joints["clip"].connect_to(idler_clip.joints["clip"])
+        idler_top.joints["tip"].connect_to(idler_tip.joints["tip"])
+        idler_top.joints["idler_lower"].connect_to(idler_lower.joints["mount"])
+        idler_top.joints["idler_upper"].connect_to(idler_upper.joints["mount"])
+
+    x_rail = LinearRail()
+
+    adapt_left = SlideToRail()
+    slide_left.joints["mount"].connect_to(adapt_left.joints["mount"])
+    adapt_left.joints["slide"].connect_to(x_rail.joints["left"])
+    x_pillow = LinearPillow()
+    x_pillow_mount = LinearPillowMount()
+    x_rail.joints["slide"].connect_to(x_pillow.joints["slide"], position=x_position)
+    x_pillow.joints["mount"].connect_to(x_pillow_mount.joints["mount"])
+
+    for is_left in (True, False):
+        x_cap = RailCap(is_left=is_left)
+        x_cap_tip = RailCap(is_left=is_left, form="tip")
+        if is_left:
+            x_rail.joints["left"].connect_to(x_cap.joints["mount"])
+        else:
+            x_rail.joints["right"].connect_to(x_cap.joints["mount"])
+        x_cap_lower_idler = GT2Idler()
+        x_cap_upper_idler = GT2Idler()
+        x_cap.joints["idler_upper"].connect_to(x_cap_upper_idler.joints["mount"])
+        x_cap.joints["idler_lower"].connect_to(x_cap_lower_idler.joints["mount"])
+        x_cap.joints["tip"].connect_to(x_cap_tip.joints["tip"])
+
+    return frame_back
+
+
+class DiamondKnurl(BasePartObject):
+    def __init__(self, radius: float, height: float, dry_run=True, **kwargs):
+
+        sides = 20
+        pitch = height * 8
+        if not dry_run:
+            with BuildPart(mode=Mode.PRIVATE) as knurl:
+                for lefthand in (False, True):
+                    with BuildLine():
+                        l1 = Helix(height=height, radius=radius, pitch=pitch, lefhand=lefthand)
+                    plane = Plane(origin=l1 @ 0, z_dir=l1 % 0)
+                    with BuildSketch(plane):
+                        RegularPolygon(1, 4)
+                    Sweep()
+
+        with BuildPart() as part:
+            Cylinder(radius, height, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            if not dry_run:
+                for r in range(sides):
+                    angle = r * 360 / sides
+                    Add(knurl.part, rotation=Rotation(about_z=angle), mode=Mode.SUBTRACT)
+
+        super().__init__(part.solids()[0], **kwargs)
+
+
+if "show_object" in locals():
+    materials = ["metal"]
+    result = None
+    if False:
+        is_left = True
+        x_pillow = LinearPillow()
+        x_pillow_mount = LinearPillowMount()
+        x_pillow.joints["mount"].connect_to(x_pillow_mount.joints["mount"])
+
+        peg = TensionPeg(radius=8 * MM, bolt=BoltM(5))
+        tensioner = Tensioner(peg=peg)
+        x_pillow_mount.joints["tensioner"].connect_to(tensioner.joints["mount"])
+        result = x_pillow
+        show_all(peg.moved(Location((0, 60, 20), (90, 180, 0))))
+    else:
+        result = Wilbur()
+
+    if result is not None:
+        show_all(result, materials)
+else:
+    stl_all(Wilbur(), materials=["plastic"])
